@@ -37,6 +37,7 @@ class Message(BaseModel):
     content: str = ""
     tool_calls: list[ToolCall] = Field(default_factory=list)
     tool_call_id: str | None = None
+    name: str | None = None  # tool name, for role=tool
 
 
 class LlmClient(Protocol):
@@ -120,7 +121,9 @@ class PhaseBAgent:
     async def _run_tool(self, call: ToolCall) -> AsyncIterator[AgentOutput]:
         result = await self._tools.execute(call.name, call.arguments)
         self._messages.append(
-            Message(role="tool", tool_call_id=call.id, content=json.dumps(result.data))
+            Message(
+                role="tool", tool_call_id=call.id, name=call.name, content=json.dumps(result.data)
+            )
         )
         if not result.ok:
             return

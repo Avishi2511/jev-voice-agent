@@ -1,0 +1,63 @@
+name: delivery_confirmation_en
+language: english
+thresholds:
+  default: 0.7
+max_retries: 1
+steps:
+  - id: identity_confirmed
+    slot: identity
+    clips:
+      ask:
+        - {id: identity.ask.1, text: "Hello, am I speaking with {name}?"}
+        - {id: identity.ask.2, text: "Hi, is this {name}?"}
+      re_ask:
+        - {id: identity.re_ask.1, text: "Sorry, is this {name}?"}
+        - {id: identity.re_ask.2, text: "Could you confirm you are {name}?"}
+    questions:
+      slot_value:
+        type: choice
+        instruction: "Does the caller confirm they are the named customer?"
+        options: [confirmed, denied, unclear]
+  - id: at_home
+    slot: at_home
+    clips:
+      ask:
+        - {id: at_home.ask.1, text: "Your order arrives today. Will someone be at home to receive it?"}
+        - {id: at_home.ask.2, text: "Your package is out for delivery. Will you be home this afternoon?"}
+      re_ask:
+        - {id: at_home.re_ask.1, text: "Will someone be available to accept the delivery?"}
+        - {id: at_home.re_ask.2, text: "Is anyone home to take the package?"}
+    questions:
+      slot_value:
+        type: choice
+        instruction: "Does the caller say someone will be available to receive the delivery?"
+        options: [yes, no, not_stated]
+  - id: alt_time
+    slot: alt_time
+    clips:
+      ask:
+        - {id: alt_time.ask.1, text: "Understood. Which day should we deliver it instead?"}
+        - {id: alt_time.ask.2, text: "No problem. When would be a better day for delivery?"}
+      re_ask:
+        - {id: alt_time.re_ask.1, text: "Would tomorrow or the day after work for you?"}
+        - {id: alt_time.re_ask.2, text: "Which day suits you for the delivery?"}
+    questions:
+      slot_value:
+        type: choice
+        instruction: "Which day does the caller prefer for rescheduled delivery?"
+        options: [tomorrow, day_after, this_weekend, not_stated]
+  - id: closing
+    clips:
+      ask:
+        - {id: closing.ask.1, text: "Thank you, your delivery is noted. Goodbye."}
+        - {id: closing.ask.2, text: "Thanks for confirming. Have a nice day."}
+shared:
+  bridge:
+    - {id: bridge.1, text: "One second, let me update that."}
+    - {id: bridge.2, text: "Just a moment."}
+  fallback:
+    - {id: fallback.1, text: "Sorry, let me connect you to our support team."}
+  ack:
+    - {id: ack.1, text: "Okay."}
+    - {id: ack.2, text: "Alright."}
+    - {id: ack.3, text: "Understood."}

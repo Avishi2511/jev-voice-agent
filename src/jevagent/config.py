@@ -20,6 +20,24 @@ class Settings(BaseSettings):
     # Off-script turn_type fires at this confidence, deliberately below slot thresholds.
     off_script_threshold: float = 0.5
     llm_max_tool_iterations: int = 4
+    # Gemini (STT, Phase B LLM, TTS). IDs are pinned here and checked against the key's model list.
+    gemini_api_key: SecretStr = SecretStr("")
+    gemini_stt_model: str = "gemini-3.5-transcribe"
+    gemini_llm_model: str = "gemini-3.8-flash"
+    gemini_tts_model: str = "gemini-3.8-flash-tts"
+    gemini_tts_voice: str = "Kore"
+    # Real-time front end
+    public_url: str = ""
+    script_path: str = "scripts/emi_reminder.yaml"
+    clips_dir: str = "clips"
+    inbound_sample_rate: int = 16000  # Vobiz -> app; 24 kHz inbound does not work
+    vad_energy_threshold: float = 500.0  # RMS, PCM16 units; used by the energy VAD
+    barge_in_frames: int = 1  # speech frames before playback is cut (FE-2)
+    min_speech_frames: int = 8  # shorter bursts are noise, not a turn
+    turn_silence_ms: dict[str, int] = {"default": 700, "hinglish": 700, "en": 600}
+    ack_enabled: bool = True
+    speculative_jev: bool = False  # needs streaming partial transcripts (A-10)
+    metrics_path: str = "logs/metrics.jsonl"
     decision_log_path: str = "logs/decisions.jsonl"
 
     @model_validator(mode="after")

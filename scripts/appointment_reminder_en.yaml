@@ -1,0 +1,63 @@
+name: appointment_reminder_en
+language: english
+thresholds:
+  default: 0.7
+max_retries: 1
+steps:
+  - id: identity_confirmed
+    slot: identity
+    clips:
+      ask:
+        - {id: identity.ask.1, text: "Hello, may I speak with {name}?"}
+        - {id: identity.ask.2, text: "Hi, is this {name}?"}
+      re_ask:
+        - {id: identity.re_ask.1, text: "Sorry, am I speaking with {name}?"}
+        - {id: identity.re_ask.2, text: "Could you confirm that you are {name}?"}
+    questions:
+      slot_value:
+        type: choice
+        instruction: "Does the caller confirm they are the named patient?"
+        options: [confirmed, denied, unclear]
+  - id: attendance
+    slot: attendance
+    clips:
+      ask:
+        - {id: attendance.ask.1, text: "You have a clinic appointment tomorrow. Will you be able to attend?"}
+        - {id: attendance.ask.2, text: "I'm calling about your appointment tomorrow. Can you make it?"}
+      re_ask:
+        - {id: attendance.re_ask.1, text: "Just to check, will you be coming to your appointment?"}
+        - {id: attendance.re_ask.2, text: "Are you able to attend tomorrow, yes or no?"}
+    questions:
+      slot_value:
+        type: choice
+        instruction: "Does the caller say they will attend the appointment?"
+        options: [will_attend, cannot_attend, unsure, not_stated]
+  - id: reschedule_slot
+    slot: reschedule_slot
+    clips:
+      ask:
+        - {id: reschedule_slot.ask.1, text: "No problem. Would you prefer a morning or an evening slot instead?"}
+        - {id: reschedule_slot.ask.2, text: "Let's move it. Do mornings or evenings suit you better?"}
+      re_ask:
+        - {id: reschedule_slot.re_ask.1, text: "Would morning or evening be better for you?"}
+        - {id: reschedule_slot.re_ask.2, text: "Which works better, morning or evening?"}
+    questions:
+      slot_value:
+        type: choice
+        instruction: "Which time of day does the caller prefer for the new appointment?"
+        options: [morning, afternoon, evening, not_stated]
+  - id: closing
+    clips:
+      ask:
+        - {id: closing.ask.1, text: "Thank you, we'll see you soon. Goodbye."}
+        - {id: closing.ask.2, text: "Thanks, take care."}
+shared:
+  bridge:
+    - {id: bridge.1, text: "One moment, let me check the calendar."}
+    - {id: bridge.2, text: "Give me a second."}
+  fallback:
+    - {id: fallback.1, text: "Sorry, let me transfer you to our front desk."}
+  ack:
+    - {id: ack.1, text: "Sure."}
+    - {id: ack.2, text: "Okay."}
+    - {id: ack.3, text: "I see."}

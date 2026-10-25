@@ -4,6 +4,7 @@ Per turn: build state -> Jev (one request) -> triggers -> engine -> action.
 After handoff the controller never consults Jev or the script again.
 """
 
+import asyncio
 from collections.abc import Callable
 from datetime import UTC, datetime
 
@@ -81,7 +82,19 @@ class Controller:
         self._remember_agent(clip)
         return PlayClip(clip_id=clip)
 
-    async def on_caller_turn(self, utterance: str) -> Action:
+    def prefetch(self, utterance: str) -> "asyncio.Task[dict[str, JevAnswer]] | None":
+        """Start this turn's Jev request early (A-10). Pass the task to on_caller_turn to use it."""
+        if self.state.mode is Mode.B or uncovered_state(self.script, self.state) is not None:
+            return None
+        state_sent = build_state(self.script, self.state, utterance)
+        questions = build_questions(self.script, self.state, self._shuffle_seed)
+        return asyncio.create_task(self._ask_jev(state_sent, questions))
+
+    async def on_caller_turn(
+        self,
+        utterance: str,
+        prefetched: "asyncio.Task[dict[str, JevAnswer]] | None" = None,
+    ) -> Action:
         self._remember(f"caller: {utterance}")
         if self.state.mode is Mode.B:
             return PassToPhaseB(utterance=utterance)
@@ -95,7 +108,11 @@ class Controller:
             handoff: Handoff | None = uncovered
         else:
             questions = build_questions(self.script, self.state, self._shuffle_seed)
-            answers = await self._ask_jev(state_sent, questions)
+            answers = (
+                await prefetched
+                if prefetched is not None
+                else await self._ask_jev(state_sent, questions)
+            )
             handoff = answer_triggers(self.script, self.state, answers, self._settings)
 
         action: Action

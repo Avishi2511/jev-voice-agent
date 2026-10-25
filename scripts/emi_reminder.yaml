@@ -57,3 +57,7 @@ shared:
     - {id: bridge.2, text: "Ek minute, main dekhti hoon."}
   fallback:
     - {id: fallback.1, text: "Maaf kijiye, main aapko humare executive se connect karti hoon."}
+  ack:
+    - {id: ack.1, text: "Ji."}
+    - {id: ack.2, text: "Theek hai."}
+    - {id: ack.3, text: "Achha."}

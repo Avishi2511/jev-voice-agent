@@ -1,0 +1,63 @@
+name: emi_reminder_en
+language: english
+thresholds:
+  default: 0.7
+max_retries: 1
+steps:
+  - id: identity_confirmed
+    slot: identity
+    clips:
+      ask:
+        - {id: identity.ask.1, text: "Hello, am I speaking with {name}?"}
+        - {id: identity.ask.2, text: "Hi, is this {name} on the line?"}
+      re_ask:
+        - {id: identity.re_ask.1, text: "Sorry, could you confirm if this is {name}?"}
+        - {id: identity.re_ask.2, text: "Am I speaking with {name}?"}
+    questions:
+      slot_value:
+        type: choice
+        instruction: "Does the caller confirm they are the named customer?"
+        options: [confirmed, denied, unclear]
+  - id: pay_when
+    slot: pay_date_bucket
+    clips:
+      ask:
+        - {id: pay_when.ask.1, text: "Your EMI is due. By when will you be able to make the payment?"}
+        - {id: pay_when.ask.2, text: "About your EMI, when can you pay it?"}
+      re_ask:
+        - {id: pay_when.re_ask.1, text: "Could you tell me which day you will make the payment?"}
+        - {id: pay_when.re_ask.2, text: "Will you pay today, tomorrow, or this week?"}
+    questions:
+      slot_value:
+        type: choice
+        instruction: "When does the caller say they will pay?"
+        options: [today, tomorrow, this_week, later, not_stated]
+  - id: payment_mode
+    slot: payment_mode
+    clips:
+      ask:
+        - {id: payment_mode.ask.1, text: "Will you pay by UPI or net banking?"}
+        - {id: payment_mode.ask.2, text: "How would you like to pay, UPI or net banking?"}
+      re_ask:
+        - {id: payment_mode.re_ask.1, text: "UPI, net banking, or cash, which works for you?"}
+        - {id: payment_mode.re_ask.2, text: "Which payment method will you use?"}
+    questions:
+      slot_value:
+        type: choice
+        instruction: "Which payment mode does the caller say they will use?"
+        options: [upi, net_banking, cash, not_stated]
+  - id: closing
+    clips:
+      ask:
+        - {id: closing.ask.1, text: "Thank you, have a great day."}
+        - {id: closing.ask.2, text: "Thanks for your time. Goodbye."}
+shared:
+  bridge:
+    - {id: bridge.1, text: "One second, let me check."}
+    - {id: bridge.2, text: "Just a moment, I'll look into that."}
+  fallback:
+    - {id: fallback.1, text: "Sorry, let me connect you to one of our executives."}
+  ack:
+    - {id: ack.1, text: "Okay."}
+    - {id: ack.2, text: "Right."}
+    - {id: ack.3, text: "Got it."}

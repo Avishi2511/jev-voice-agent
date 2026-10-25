@@ -8,3 +8,4 @@ __pycache__/
 clips/**/*.wav
 data/raw/
 logs/
+clips/**/*.pcm
