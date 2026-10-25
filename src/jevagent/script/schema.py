@@ -38,6 +38,7 @@ class Script(BaseModel):
     thresholds: dict[str, float]
     max_retries: int = 1
     steps: list[Step]
+    shared: dict[str, list[Clip]] = Field(default_factory=dict)  # bridge, fallback, disclosure
 
     def step(self, step_id: str) -> Step:
         for s in self.steps:
@@ -45,10 +46,14 @@ class Script(BaseModel):
                 return s
         raise KeyError(step_id)
 
+    def all_clips(self) -> list[Clip]:
+        step_clips = [
+            c
+            for s in self.steps
+            for group in (s.clips.ask, s.clips.re_ask, s.clips.confirm)
+            for c in group
+        ]
+        return step_clips + [c for group in self.shared.values() for c in group]
+
     def clip_text(self, clip_id: str) -> str | None:
-        for step in self.steps:
-            for group in (step.clips.ask, step.clips.re_ask, step.clips.confirm):
-                for clip in group:
-                    if clip.id == clip_id:
-                        return clip.text
-        return None
+        return next((c.text for c in self.all_clips() if c.id == clip_id), None)

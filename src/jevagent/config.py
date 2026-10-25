@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     default_confidence_threshold: float = 0.7
     # Off-script turn_type fires at this confidence, deliberately below slot thresholds.
     off_script_threshold: float = 0.5
+    llm_max_tool_iterations: int = 4
     decision_log_path: str = "logs/decisions.jsonl"
 
     @model_validator(mode="after")

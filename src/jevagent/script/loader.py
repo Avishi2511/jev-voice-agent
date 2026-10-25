@@ -53,12 +53,7 @@ def validate_script(script: Script) -> None:
                     f"(one of {sorted(ESCAPE_OPTIONS)})"
                 )
 
-    clip_ids = [
-        c.id
-        for s in script.steps
-        for group in (s.clips.ask, s.clips.re_ask, s.clips.confirm)
-        for c in group
-    ]
+    clip_ids = [c.id for c in script.all_clips()]
     if len(set(clip_ids)) != len(clip_ids):
         raise ScriptError("clip ids must be unique across the script")
 

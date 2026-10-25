@@ -51,3 +51,9 @@ steps:
       ask:
         - {id: closing.ask.1, text: "Dhanyavaad, aapka din shubh ho."}
         - {id: closing.ask.2, text: "Shukriya, aapka samay dene ke liye dhanyavaad."}
+shared:
+  bridge:
+    - {id: bridge.1, text: "Ek second, main check karti hoon."}
+    - {id: bridge.2, text: "Ek minute, main dekhti hoon."}
+  fallback:
+    - {id: fallback.1, text: "Maaf kijiye, main aapko humare executive se connect karti hoon."}
