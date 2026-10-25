@@ -1,4 +1,4 @@
-"""Run an evaluation against live Jev: uv run python -m jevagent.eval.cli --data data/turns.jsonl."""
+"""Run an evaluation against live Jev: python -m jevagent.eval.cli --data data/turns.jsonl."""
 
 import argparse
 import asyncio
