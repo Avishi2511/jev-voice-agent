@@ -46,7 +46,7 @@ class CallState(BaseModel):
     slots: dict[str, Slot] = Field(default_factory=dict)
     retries: dict[str, int] = Field(default_factory=dict)
     clips_played: list[str] = Field(default_factory=list)
-    recent_turns: list[dict[str, str]] = Field(default_factory=list)
+    recent_turns: list[str] = Field(default_factory=list)
     mode: Mode = Mode.A
 
 
@@ -79,6 +79,7 @@ class ReAsk(BaseModel):
 
 class Handoff(BaseModel):
     reason: HandoffReason
+    detail: str | None = None  # e.g. turn_type=objection
 
 
 Decision = Advance | ReAsk | Handoff

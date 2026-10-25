@@ -17,7 +17,9 @@ class Settings(BaseSettings):
     jev_max_retries: int = 1
     # Early-handoff bias (H-2): confidence below this after one re-ask hands off.
     default_confidence_threshold: float = 0.7
-    max_retries_per_step: int = 1
+    # Off-script turn_type fires at this confidence, deliberately below slot thresholds.
+    off_script_threshold: float = 0.5
+    decision_log_path: str = "logs/decisions.jsonl"
 
     @model_validator(mode="after")
     def _pin_model(self) -> "Settings":

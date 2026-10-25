@@ -63,7 +63,7 @@ def test_shuffle_is_seeded_and_off_by_default() -> None:
 
 def test_state_is_minimal() -> None:
     state = fresh()
-    state.recent_turns = [{"role": "caller", "text": "EARLIER-SECRET-TURN"}]
+    state.recent_turns = ["caller: EARLIER-SECRET-TURN"]
     state.clips_played = ["identity.ask.1", "pay_when.ask.1"]
     state.slots["identity"] = Slot(value="confirmed", status=SlotStatus.FILLED, confidence=0.9)
     built = build_state(SCRIPT, state, "kal kar dunga")
