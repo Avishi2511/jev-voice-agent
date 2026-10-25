@@ -17,7 +17,7 @@ from jevagent.script.loader import load_script
 async def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--data", required=True)
-    ap.add_argument("--script", default="scripts/emi_reminder.yaml")
+    ap.add_argument("--script", default="scripts/emi_reminder_en.yaml")
     ap.add_argument("--split", choices=["tuning", "validation", "heldout"], default="validation")
     ap.add_argument("--questions-dir", default="questions")
     ap.add_argument("--drafts", action="store_true", help="include unpromoted question versions")

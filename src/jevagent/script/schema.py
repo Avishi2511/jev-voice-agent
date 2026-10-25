@@ -34,7 +34,7 @@ class Step(BaseModel):
 
 class Script(BaseModel):
     name: str
-    language: str = "hinglish"
+    language: str = "english"
     thresholds: dict[str, float]
     max_retries: int = 1
     steps: list[Step]

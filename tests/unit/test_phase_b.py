@@ -29,7 +29,7 @@ from jevagent.phase_b.prompt import build_system_prompt, last_caller_utterance
 from jevagent.phase_b.tools import MockCrm, RecordingTransfer, ToolDef, ToolRegistry
 from jevagent.script.loader import load_script
 
-SCRIPT = load_script(Path(__file__).parents[2] / "scripts" / "emi_reminder.yaml")
+SCRIPT = load_script(Path(__file__).parents[2] / "scripts" / "emi_reminder_en.yaml")
 SETTINGS = Settings(_env_file=None, jev_api_key=SecretStr("k"))  # type: ignore[call-arg]
 TOOLS = ["get_loan_account", "explain_charges", "schedule_callback", "transfer_to_human"]
 TODAY = date(2026, 1, 1)
@@ -42,8 +42,8 @@ PACKET = HandoffPacket(
     },
     missing=["pay_date_bucket"],
     recent_turns=[
-        "agent: Aapki EMI due hai. Aap payment kab tak kar denge?",
-        "caller: Pehle penalty ka bataiye, wo kyun laga?",
+        "agent: Your EMI is due. By when will you pay?",
+        "caller: First tell me about the penalty, why was it charged?",
     ],
     clips_played=["identity.ask.1", "pay_when.ask.1"],
     tools=TOOLS,
@@ -146,27 +146,27 @@ def test_prompt_contains_all_packet_content() -> None:
     assert "turn_type=objection" in prompt
     assert "identity: confirmed" in prompt
     assert "pay_date_bucket (unclear)" in prompt
-    assert "Pehle penalty ka bataiye" in prompt
+    assert "First tell me about the penalty" in prompt
     assert "FIRST sentence must acknowledge" in prompt
     assert "do NOT ask for these again" in prompt
     for tool in TOOLS:
         assert tool in prompt
-    assert last_caller_utterance(PACKET) == "Pehle penalty ka bataiye, wo kyun laga?"
+    assert last_caller_utterance(PACKET) == "First tell me about the penalty, why was it charged?"
 
 
 # -- agent -----------------------------------------------------------------
 
 
 async def test_bridge_clip_then_first_turn_sees_caller_utterance() -> None:
-    llm = FakeLlm([[TextDelta(text="Penalty ke baare mein, ")]])
+    llm = FakeLlm([[TextDelta(text="About the penalty, ")]])
     ag, _ = agent(llm)
     bridge = ag.begin()
     assert bridge.clip_id.startswith("bridge.")
     out = await collect(ag.first_turn())
-    assert out == [Say(text="Penalty ke baare mein, ")]
+    assert out == [Say(text="About the penalty, ")]
     sent = llm.calls[0]
     assert sent[0].role == "system" and sent[1] == Message(
-        role="user", content="Pehle penalty ka bataiye, wo kyun laga?"
+        role="user", content="First tell me about the penalty, why was it charged?"
     )
 
 
@@ -176,11 +176,11 @@ def references_prior(first_line: str, packet: HandoffPacket) -> bool:
 
 
 async def test_first_line_references_prior_content() -> None:
-    llm = FakeLlm([[TextDelta(text="Aapne penalty ke baare mein poocha, main batati hoon.")]])
+    llm = FakeLlm([[TextDelta(text="You asked about the penalty, let me explain.")]])
     ag, _ = agent(llm)
     first = next(o for o in await collect(ag.first_turn()) if isinstance(o, Say))
     assert references_prior(first.text, PACKET)
-    assert not references_prior("Namaste, kya main aapka naam jaan sakti hoon?", PACKET)
+    assert not references_prior("Hello, may I ask your name?", PACKET)
 
 
 async def test_tool_loop_runs_tools_then_answers() -> None:
@@ -258,13 +258,13 @@ def test_script_without_shared_clips_rejected() -> None:
 
 async def test_end_to_end_phase_a_handoff_phase_b_tool_close() -> None:
     jev = RuleBasedJev(
-        slot_keywords={"identity_confirmed": {"confirmed": ["haan"]}},
+        slot_keywords={"identity_confirmed": {"confirmed": ["yes"]}},
         turn_keywords={"objection": ["penalty"]},
     )
     ctl = Controller(SCRIPT, jev, SETTINGS, MemoryDecisionLog(), "c1", tools=TOOLS, seed=1)
     ctl.start()
-    assert isinstance(await ctl.on_caller_turn("haan ji"), PlayClip)
-    handoff = await ctl.on_caller_turn("pehle penalty ka bataiye")
+    assert isinstance(await ctl.on_caller_turn("yes that is me"), PlayClip)
+    handoff = await ctl.on_caller_turn("first tell me about the penalty")
     assert isinstance(handoff, StartHandoff)
 
     llm = FakeLlm(
@@ -280,7 +280,7 @@ async def test_end_to_end_phase_a_handoff_phase_b_tool_close() -> None:
 
     outputs: list[object] = [ag.begin()]
     outputs += await collect(ag.first_turn())
-    follow = await ctl.on_caller_turn("theek hai, samajh gaya")
+    follow = await ctl.on_caller_turn("okay, I understand")
     assert isinstance(follow, PassToPhaseB)
     outputs += await collect(ag.on_caller_turn(follow.utterance))
 

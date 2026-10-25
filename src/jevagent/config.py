@@ -28,13 +28,13 @@ class Settings(BaseSettings):
     gemini_tts_voice: str = "Kore"
     # Real-time front end
     public_url: str = ""
-    script_path: str = "scripts/emi_reminder.yaml"
+    script_path: str = "scripts/emi_reminder_en.yaml"
     clips_dir: str = "clips"
     inbound_sample_rate: int = 16000  # Vobiz -> app; 24 kHz inbound does not work
     vad_energy_threshold: float = 500.0  # RMS, PCM16 units; used by the energy VAD
     barge_in_frames: int = 1  # speech frames before playback is cut (FE-2)
     min_speech_frames: int = 8  # shorter bursts are noise, not a turn
-    turn_silence_ms: dict[str, int] = {"default": 700, "hinglish": 700, "en": 600}
+    turn_silence_ms: dict[str, int] = {"default": 700, "english": 600}
     baseline_mode: bool = False  # plain STT->LLM->TTS agent, Phase A bypassed (Stage 2)
     summaries_path: str = "logs/calls.jsonl"
     # Stage 3: run Phase A silently beside the live baseline and log what it would have done.
@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     # Transcripts contain PII: off unless you have consent and a retention policy (PRD Q7).
     save_transcripts: bool = False
     transcripts_path: str = "logs/transcripts.jsonl"
+    log_level: str = "INFO"  # DEBUG also prints every skipped Gemini stream event
     ack_enabled: bool = True
     speculative_jev: bool = False  # needs streaming partial transcripts (A-10)
     metrics_path: str = "logs/metrics.jsonl"

@@ -15,7 +15,7 @@ from jevagent.script.engine import ScriptEngine
 from jevagent.script.loader import ScriptError, load_script
 from jevagent.script.schema import Script
 
-SCRIPT_PATH = Path(__file__).parents[2] / "scripts" / "emi_reminder.yaml"
+SCRIPT_PATH = Path(__file__).parents[2] / "scripts" / "emi_reminder_en.yaml"
 
 
 @pytest.fixture

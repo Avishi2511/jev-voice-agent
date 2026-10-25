@@ -1,4 +1,4 @@
-"""Benchmark candidate Phase B LLMs on Hinglish handoff cases (B-1).
+"""Benchmark candidate Phase B LLMs on handoff cases (B-1).
 
 Each case is a handoff packet plus the caller's last utterance. We measure time to the first
 token (text or tool call), total time, whether the right tool was chosen, and whether the first

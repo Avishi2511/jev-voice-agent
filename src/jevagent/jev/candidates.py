@@ -1,33 +1,35 @@
 """Regex/parser candidates for free-form values (A-5).
 
 Parsers propose candidates; Jev only picks among them and code does any comparison.
-Hindi number words are supported for 0-31, round tens, and sau/hazaar/lakh multipliers.
+English number words are supported (zero to ninety-nine as separate words, plus
+hundred / thousand / lakh / million multipliers); dates need digits for the day.
 """
 
 import re
 from dataclasses import dataclass, field
 
 _UNITS: dict[str, int] = {
-    "zero": 0, "shunya": 0,
-    "ek": 1, "do": 2, "teen": 3, "char": 4, "chaar": 4, "paanch": 5, "panch": 5,
-    "chhe": 6, "chhah": 6, "che": 6, "saat": 7, "sat": 7, "aath": 8, "ath": 8,
-    "nau": 9, "no": 9, "das": 10, "gyarah": 11, "barah": 12, "terah": 13,
-    "chaudah": 14, "pandrah": 15, "solah": 16, "satrah": 17, "atharah": 18,
-    "unnis": 19, "bees": 20, "ikkis": 21, "baees": 22, "baais": 22, "teis": 23,
-    "chaubis": 24, "pachchis": 25, "pachis": 25, "chhabbis": 26, "sattais": 27,
-    "atthais": 28, "untis": 29, "tees": 30, "tis": 30, "iktis": 31, "ikattis": 31,
-    "chalis": 40, "pachas": 50, "saath": 60, "sattar": 70, "assi": 80, "nabbe": 90,
+    "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+    "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
+    "thirteen": 13, "fourteen": 14, "fifteen": 15, "sixteen": 16, "seventeen": 17,
+    "eighteen": 18, "nineteen": 19, "twenty": 20, "thirty": 30, "forty": 40,
+    "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90,
 }  # fmt: skip
 _DIGIT_WORDS = {w: v for w, v in _UNITS.items() if v <= 9}
-_MULTIPLIERS = {"sau": 100, "hazaar": 1_000, "hazar": 1_000, "lakh": 100_000, "lac": 100_000}
+_MULTIPLIERS = {
+    "hundred": 100,
+    "thousand": 1_000,
+    "lakh": 100_000,
+    "lac": 100_000,
+    "million": 1_000_000,
+}
+_SUFFIX = {"k": 1_000, "thousand": 1_000, "lakh": 100_000, "lac": 100_000, "million": 1_000_000}
 
 _MONTHS: dict[str, int] = {
-    "jan": 1, "january": 1, "janwari": 1, "feb": 2, "february": 2, "farwari": 2,
-    "mar": 3, "march": 3, "apr": 4, "april": 4, "may": 5, "mai": 5, "jun": 6,
-    "june": 6, "jul": 7, "july": 7, "aug": 8, "august": 8, "agast": 8,
-    "sep": 9, "sept": 9, "september": 9, "sitambar": 9, "oct": 10, "october": 10,
-    "aktubar": 10, "nov": 11, "november": 11, "navambar": 11, "dec": 12,
-    "december": 12, "disambar": 12,
+    "jan": 1, "january": 1, "feb": 2, "february": 2, "mar": 3, "march": 3,
+    "apr": 4, "april": 4, "may": 5, "jun": 6, "june": 6, "jul": 7, "july": 7,
+    "aug": 8, "august": 8, "sep": 9, "sept": 9, "september": 9, "oct": 10,
+    "october": 10, "nov": 11, "november": 11, "dec": 12, "december": 12,
 }  # fmt: skip
 _MONTH_RE = "|".join(sorted(_MONTHS, key=len, reverse=True))
 
@@ -47,8 +49,8 @@ def _tokens(text: str) -> list[str]:
 # -- numbers ---------------------------------------------------------------
 
 
-def hindi_number(words: list[str]) -> int | None:
-    """Parse e.g. ['paanch', 'hazaar'] -> 5000, ['do', 'lakh', 'pachas', 'hazaar'] -> 250000."""
+def number_from_words(words: list[str]) -> int | None:
+    """Parse e.g. ['five', 'thousand'] -> 5000, ['two', 'lakh', 'fifty', 'thousand'] -> 250000."""
     total = current = 0
     seen = False
     for w in words:
@@ -75,7 +77,7 @@ def _number_word_runs(text: str) -> list[tuple[str, int]]:
             run.append(tok)
             continue
         if run:
-            n = hindi_number(run)
+            n = number_from_words(run)
             if n is not None:
                 runs.append((" ".join(run), n))
             run = []
@@ -85,7 +87,7 @@ def _number_word_runs(text: str) -> list[tuple[str, int]]:
 # -- amounts ---------------------------------------------------------------
 
 _AMOUNT_RE = re.compile(
-    r"(?:rs\.?|inr|₹)?\s*(\d{1,3}(?:,\d{2,3})+|\d+)(?:\.\d+)?\s*(k|hazaar|hazar|lakh|lac)?",
+    r"(?:rs\.?|inr|₹)?\s*(\d{1,3}(?:,\d{2,3})+|\d+)(?:\.\d+)?\s*(k|thousand|lakh|lac|million)?\b",
     re.IGNORECASE,
 )
 
@@ -93,12 +95,8 @@ _AMOUNT_RE = re.compile(
 def extract_amounts(text: str) -> list[Candidate]:
     out: list[Candidate] = []
     for m in _AMOUNT_RE.finditer(text):
-        n = int(m.group(1).replace(",", ""))
-        suffix = (m.group(2) or "").lower()
-        n *= {"k": 1_000, "hazaar": 1_000, "hazar": 1_000, "lakh": 100_000, "lac": 100_000}.get(
-            suffix, 1
-        )
-        if n >= 100:  # skip bare small numbers such as dates
+        n = int(m.group(1).replace(",", "")) * _SUFFIX.get((m.group(2) or "").lower(), 1)
+        if n >= 100:  # skip bare small numbers such as days of the month
             out.append(Candidate("amount", str(n), m.group(0).strip(), {"amount": n}))
     if not out:
         for span, n in _number_word_runs(text):
@@ -150,9 +148,7 @@ _DAY_MONTH = re.compile(
 _MONTH_DAY = re.compile(
     rf"\b({_MONTH_RE})\s+(\d{{1,2}})(?:st|nd|rd|th)?\b(?:\s*,?\s*(\d{{4}}))?", re.IGNORECASE
 )
-_DAY_WORD = re.compile(
-    r"(?<!\d)(\d{1,2})(?:st|nd|rd|th)?\s*(?:tareekh|tarikh|date)\b", re.IGNORECASE
-)
+_DAY_ONLY = re.compile(r"\b(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)\b", re.IGNORECASE)
 
 
 def extract_dates(text: str) -> list[Candidate]:
@@ -163,17 +159,15 @@ def extract_dates(text: str) -> list[Candidate]:
         found.append(_date(int(m[1]), _MONTHS[m[2].lower()], _year(m[3]), m[0]))
     for m in _MONTH_DAY.finditer(text):
         found.append(_date(int(m[2]), _MONTHS[m[1].lower()], _year(m[3]), m[0]))
-    for m in _DAY_WORD.finditer(text):
-        found.append(_date(int(m[1]), None, None, m[0]))
-    # "pandrah tareekh": number word directly before the date marker
-    toks = _tokens(text)
-    for i, tok in enumerate(toks[:-1]):
-        if tok in _UNITS and toks[i + 1] in {"tareekh", "tarikh", "date"}:
-            found.append(_date(_UNITS[tok], None, None, f"{tok} {toks[i + 1]}"))
     unique: dict[str, Candidate] = {}
     for c in found:
         if c is not None:
             unique.setdefault(c.value, c)
+    if not unique:  # "on the 15th": day only, when nothing more specific was found
+        for m in _DAY_ONLY.finditer(text):
+            c = _date(int(m[1]), None, None, m[0])
+            if c is not None:
+                unique.setdefault(c.value, c)
     return list(unique.values())
 
 

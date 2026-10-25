@@ -77,21 +77,21 @@ class DownJev:
 
 
 async def test_drill_jev_outage_hands_off_instead_of_going_silent(tmp_path: Path) -> None:
-    rounds: list[list[LlmEvent]] = [[TextDelta(text="Ek minute.")]]
-    h = Harness(tmp_path, ["haan ji"], rounds)
+    rounds: list[list[LlmEvent]] = [[TextDelta(text="One minute.")]]
+    h = Harness(tmp_path, ["yes that is me"], rounds)
     await h.setup()
     h.jev.inner.ask = DownJev(JevConfigError("HTTP 401")).ask  # type: ignore[method-assign]
     mark = len(h.mock.sent)
     await h.mock.say()
     assert h.controller.state.mode.value == "B"
-    assert h.synth.texts == ["Ek minute."]  # the LLM took over and spoke
+    assert h.synth.texts == ["One minute."]  # the LLM took over and spoke
     assert h.mock.audio_since(mark)
     await h.mock.session.on_stop()
     assert h.summaries.rows[0].handoff_reason == "jev_unavailable"
 
 
 async def test_drill_llm_outage_plays_fallback_and_transfers(tmp_path: Path) -> None:
-    h = await Harness(tmp_path, ["penalty kyun"], []).setup()  # no LLM rounds: stream() raises
+    h = await Harness(tmp_path, ["why the penalty"], []).setup()  # no LLM rounds: stream() raises
     await h.mock.say()
     await asyncio.sleep(0.05)
     assert len(h.transfers.transfers) == 1 and h.transfers.transfers[0][1] == "llm_failure"
@@ -105,7 +105,10 @@ async def test_drill_stt_down_reasks_then_hands_off_and_phase_b_asks_to_repeat(
     tmp_path: Path,
 ) -> None:
     errs: list[str | Exception] = [TranscriptionError("503")] * 3
-    rounds: list[list[LlmEvent]] = [[TextDelta(text="Dobara boliye.")], [TextDelta(text="Ji.")]]
+    rounds: list[list[LlmEvent]] = [
+        [TextDelta(text="Could you say that again?")],
+        [TextDelta(text="Ji.")],
+    ]
     h = await Harness(tmp_path, errs, rounds).setup()
     await h.mock.say()  # Phase A: re-ask
     await h.mock.say()  # Phase A: retry limit -> handoff
@@ -126,8 +129,8 @@ async def test_drill_tts_failure_falls_back_to_human(tmp_path: Path) -> None:
             raise SynthesisError("quota")
             yield b""
 
-    rounds: list[list[LlmEvent]] = [[TextDelta(text="Penalty ke baare mein. Dekhte hain.")]]
-    h = Harness(tmp_path, ["penalty kyun"], rounds)
+    rounds: list[list[LlmEvent]] = [[TextDelta(text="About the penalty. Let us see.")]]
+    h = Harness(tmp_path, ["why the penalty"], rounds)
     await h.setup()
     h.mock.session._synth = BrokenSynth()  # type: ignore[assignment]  # noqa: SLF001
     await h.mock.say()
@@ -138,7 +141,7 @@ async def test_drill_tts_failure_falls_back_to_human(tmp_path: Path) -> None:
 
 
 async def test_drill_telephony_disconnect_mid_call(tmp_path: Path) -> None:
-    h = await Harness(tmp_path, ["haan ji"], auto_played=False).setup()
+    h = await Harness(tmp_path, ["yes that is me"], auto_played=False).setup()
     await h.mock.session.on_event({"event": "stop"})  # Vobiz ends the stream
     await h.mock.session.on_event({"event": "stop"})  # duplicate stop is harmless
     assert len(h.summaries.rows) == 1 and h.summaries.rows[0].outcome == "dropped"
@@ -146,11 +149,11 @@ async def test_drill_telephony_disconnect_mid_call(tmp_path: Path) -> None:
 
 # -- compliance --------------------------------------------------------------------------
 
-REQUIRED = "Ye call quality ke liye record ki ja rahi hai."
+REQUIRED = "This call is being recorded for quality purposes."
 CONFIG = ComplianceConfig(
     disclosures=[
         Disclosure(id="disclosure.1", text=REQUIRED, required_on="all"),
-        Disclosure(id="closing.ask.1", text="Dhanyavaad", required_on="completed"),
+        Disclosure(id="closing.ask.1", text="Thank you", required_on="completed"),
     ]
 )
 
@@ -164,8 +167,8 @@ def script_with_disclosure(text: str):  # type: ignore[no-untyped-def]
 
 
 def test_script_check_requires_verbatim_wording() -> None:
-    assert check_script(script_with_disclosure(f"Namaste. {REQUIRED}"), CONFIG) == []
-    bad = check_script(script_with_disclosure("Ye call record ho rahi hai."), CONFIG)
+    assert check_script(script_with_disclosure(f"Hello. {REQUIRED}"), CONFIG) == []
+    bad = check_script(script_with_disclosure("This call may be recorded."), CONFIG)
     assert bad and "verbatim" in bad[0]
     missing = check_script(SCRIPT, CONFIG)
     assert any("disclosure.1: no such clip" in p for p in missing)
@@ -200,7 +203,7 @@ def test_load_config(tmp_path: Path) -> None:
 
 
 async def test_call_records_which_clips_played(tmp_path: Path) -> None:
-    h = await Harness(tmp_path, ["haan ji"]).setup()
+    h = await Harness(tmp_path, ["yes that is me"]).setup()
     await h.mock.say()
     await h.mock.session.on_stop()
     played = h.summaries.rows[0].clips_played

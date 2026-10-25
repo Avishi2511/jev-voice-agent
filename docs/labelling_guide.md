@@ -14,13 +14,13 @@ before running any evaluation (E-2); relabelling after seeing results invalidate
 | `answered_step` | `yes` if the utterance directly answers the question asked in the last clip, `no` if it does not, `unclear` if you cannot tell. A partial or hedged answer ("shayad kal") is `unclear`. |
 | `slot_value:<step>` | The option from the step's list that the utterance states. `not_stated` / `unclear` when the options do not apply. Label other steps' slots only if the caller actually said them (early fill). |
 | `answers_other_step` | The id of a later step the caller also answered, else `none`. |
-| `corrects_stored` | `yes` only if the caller contradicts or changes a value in `stored` ("nahi, kal nahi, parso"). Repeating or confirming a value is `no`. |
+| `corrects_stored` | `yes` only if the caller contradicts or changes a value in `stored` ("no, not tomorrow, the day after"). Repeating or confirming a value is `no`. |
 | `turn_type` | `on_script`: direct answer or acknowledgement relevant to the last clip. `question`: caller asks something. `objection`: caller disputes or pushes back (e.g. penalty, amount). `complaint`: caller is upset about service or conduct. `wants_human`: caller asks for a person. `wrong_person`: caller is not the customer. `unclear`: unintelligible or silent. |
 | `should_handoff` | `true` if a careful human supervisor would say the scripted agent should stop here: any `turn_type` other than `on_script`/`unclear`, an unresolved correction, or a state the script does not cover. A single unclear answer on the first try is **not** a handoff (re-ask first). |
 
 ## Rules for ambiguous cases
 - Mixed utterance (answer plus question): `turn_type` is the non-script part; label the slot value too.
-- Hinglish number or date words count as stated values.
+- Spoken number words ("five thousand") count as stated values.
 - Background chatter, silence or "hello?": `answered_step=no`, `turn_type=unclear`.
 - When two labellers disagree, discuss and add the resolution to this file.
 

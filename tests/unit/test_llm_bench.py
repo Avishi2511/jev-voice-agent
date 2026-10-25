@@ -18,7 +18,7 @@ PACKET = HandoffPacket(
     handoff_reason="turn_type=objection",
     slots={"identity": PacketSlot(value="confirmed", confidence=0.9, status=SlotStatus.FILLED)},
     missing=[],
-    recent_turns=["agent: EMI due hai.", "caller: penalty kyun laga hai mujhe"],
+    recent_turns=["agent: EMI due hai.", "caller: why was I charged a penalty"],
     clips_played=[],
     tools=["explain_charges", "transfer_to_human"],
 )
@@ -53,11 +53,9 @@ async def test_run_case_scores_tool_and_acknowledgement() -> None:
 
 async def test_no_tool_expected_and_text_acknowledgement() -> None:
     case = BenchCase(packet=PACKET)
-    ok = await run_case(
-        Scripted([TextDelta(text="Aapne penalty ke baare mein poocha.")]), "m", case
-    )
+    ok = await run_case(Scripted([TextDelta(text="You asked about the penalty.")]), "m", case)
     assert ok.tool_ok and ok.acknowledged
-    off = await run_case(Scripted([TextDelta(text="Namaste, kaise hain aap?")]), "m", case)
+    off = await run_case(Scripted([TextDelta(text="Hello, how are you?")]), "m", case)
     assert off.tool_ok and not off.acknowledged
     stray = await run_case(Scripted([tool("explain_charges")]), "m", case)
     assert not stray.tool_ok  # called a tool when none was expected

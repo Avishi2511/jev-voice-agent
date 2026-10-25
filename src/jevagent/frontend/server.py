@@ -20,6 +20,7 @@ from jevagent.frontend.vad import EnergyVad
 from jevagent.frontend.vobiz_bridge import CallSession, Close, Send, TimerSlot
 from jevagent.jev.client import HttpJevClient
 from jevagent.observability.decision_log import JsonlDecisionLog
+from jevagent.observability.logging import configure_logging
 from jevagent.observability.metrics import JsonlMetrics, TimedJev
 from jevagent.observability.summary import JsonlSummaries, JsonlTranscripts, Usage
 from jevagent.phase_a.ack import AckPolicy
@@ -181,6 +182,7 @@ def main() -> None:
     import uvicorn
 
     settings = Settings()
+    configure_logging(settings.log_level)
     if (
         not settings.gemini_api_key.get_secret_value()
         or not settings.jev_api_key.get_secret_value()

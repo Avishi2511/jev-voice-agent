@@ -9,7 +9,7 @@ from jevagent.jev.candidates import (
     extract_amounts,
     extract_dates,
     extract_phones,
-    hindi_number,
+    number_from_words,
 )
 from jevagent.jev.fake import RuleBasedJev
 from jevagent.jev.questions import build_questions, build_state, candidate_question
@@ -17,7 +17,7 @@ from jevagent.models import ESCAPE_OPTIONS, QuestionType, Slot, SlotStatus
 from jevagent.script.engine import ScriptEngine
 from jevagent.script.loader import load_script
 
-SCRIPT = load_script(Path(__file__).parents[2] / "scripts" / "emi_reminder.yaml")
+SCRIPT = load_script(Path(__file__).parents[2] / "scripts" / "emi_reminder_en.yaml")
 
 
 def fresh():  # type: ignore[no-untyped-def]
@@ -66,23 +66,23 @@ def test_state_is_minimal() -> None:
     state.recent_turns = ["caller: EARLIER-SECRET-TURN"]
     state.clips_played = ["identity.ask.1", "pay_when.ask.1"]
     state.slots["identity"] = Slot(value="confirmed", status=SlotStatus.FILLED, confidence=0.9)
-    built = build_state(SCRIPT, state, "kal kar dunga")
+    built = build_state(SCRIPT, state, "i will pay tomorrow")
     assert set(built) == {"current_step", "stored_values", "last_clip", "utterance"}
     assert "EARLIER-SECRET-TURN" not in json.dumps(built)
     assert built["stored_values"] == {"identity": "confirmed"}
     assert built["last_clip"] == SCRIPT.clip_text("pay_when.ask.1")
-    assert built["utterance"] == "kal kar dunga"
+    assert built["utterance"] == "i will pay tomorrow"
 
 
 async def test_rule_based_fake_answers_every_question() -> None:
-    jev = RuleBasedJev({"identity_confirmed": {"confirmed": ["haan"]}}, {"question": ["kyun"]})
+    jev = RuleBasedJev({"identity_confirmed": {"confirmed": ["yes"]}}, {"question": ["why"]})
     state = fresh()
     qs = build_questions(SCRIPT, state)
-    answers = await jev.ask(build_state(SCRIPT, state, "haan ji"), qs)
+    answers = await jev.ask(build_state(SCRIPT, state, "yes that is me"), qs)
     assert set(answers) == {q.key for q in qs}
     assert answers["slot_value:identity_confirmed"].selected == "confirmed"
     assert answers["answered_step"].selected == "yes"
-    miss = await jev.ask(build_state(SCRIPT, state, "kyun?"), qs)
+    miss = await jev.ask(build_state(SCRIPT, state, "why?"), qs)
     assert miss["turn_type"].selected == "question"
     assert miss["slot_value:identity_confirmed"].selected == "unclear"
 
@@ -93,31 +93,31 @@ async def test_rule_based_fake_answers_every_question() -> None:
 @pytest.mark.parametrize(
     ("words", "expected"),
     [
-        (["paanch", "hazaar"], 5000),
-        (["do", "lakh", "pachas", "hazaar"], 250000),
-        (["sau"], 100),
-        (["teen", "sau"], 300),
-        (["ek", "hazaar", "paanch", "sau"], 1500),
-        (["bees"], 20),
+        (["five", "thousand"], 5000),
+        (["two", "lakh", "fifty", "thousand"], 250000),
+        (["hundred"], 100),
+        (["three", "hundred"], 300),
+        (["one", "thousand", "five", "hundred"], 1500),
+        (["twenty", "five"], 25),
         ([], None),
-        (["paanch", "kela"], None),
+        (["five", "banana"], None),
     ],
 )
-def test_hindi_number(words: list[str], expected: int | None) -> None:
-    assert hindi_number(words) == expected
+def test_number_from_words(words: list[str], expected: int | None) -> None:
+    assert number_from_words(words) == expected
 
 
 @pytest.mark.parametrize(
     ("text", "values"),
     [
-        ("5000 rupaye", ["5000"]),
-        ("Rs. 12,500 bhej dunga", ["12500"]),
+        ("5000 rupees", ["5000"]),
+        ("Rs. 12,500 by tomorrow", ["12500"]),
         ("₹5k", ["5000"]),
         ("2 lakh", ["200000"]),
-        ("paanch hazaar rupaye", ["5000"]),
-        ("do sau", ["200"]),
-        ("kal", []),
-        ("15 tareekh ko", []),
+        ("five thousand rupees", ["5000"]),
+        ("two hundred", ["200"]),
+        ("tomorrow", []),
+        ("on the 15th", []),
     ],
 )
 def test_amounts(text: str, values: list[str]) -> None:
@@ -130,10 +130,10 @@ def test_amounts(text: str, values: list[str]) -> None:
         ("9876543210", ["9876543210"]),
         ("mera number +91 98765-43210 hai", ["9876543210"]),
         ("098765 43210", ["9876543210"]),
-        ("nau aath saat chhe paanch char teen do ek zero", ["9876543210"]),
+        ("nine eight seven six five four three two one zero", ["9876543210"]),
         ("12345", []),
         ("1234567890", []),
-        ("nau aath saat", []),
+        ("nine eight seven", []),
     ],
 )
 def test_phones(text: str, values: list[str]) -> None:
@@ -148,8 +148,8 @@ def test_phones(text: str, values: list[str]) -> None:
         ("15th March", "15-03-????"),
         ("15 of march 2026", "15-03-2026"),
         ("march 15", "15-03-????"),
-        ("15 tareekh", "15-??-????"),
-        ("pandrah tareekh ko", "15-??-????"),
+        ("on the 15th", "15-??-????"),
+        ("the 3rd of march", "03-03-????"),
         ("1/2/25", "01-02-2025"),
     ],
 )
@@ -157,14 +157,14 @@ def test_dates(text: str, value: str) -> None:
     assert value in [c.value for c in extract_dates(text)]
 
 
-@pytest.mark.parametrize("text", ["32/01", "5/13", "kal dunga", "40 tareekh"])
+@pytest.mark.parametrize("text", ["32/01", "5/13", "I will pay tomorrow", "the 40th"])
 def test_dates_rejected(text: str) -> None:
     assert extract_dates(text) == []
 
 
 def test_date_parts_compared_in_code() -> None:
     full = extract_dates("15 march 2026")[0]
-    day_only = extract_dates("15 tareekh")[0]
+    day_only = extract_dates("on the 15th")[0]
     other = extract_dates("16 march")[0]
     assert full.parts == {"day": 15, "month": 3, "year": 2026}
     assert date_matches(full, day_only)

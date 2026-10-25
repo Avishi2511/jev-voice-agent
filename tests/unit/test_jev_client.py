@@ -52,7 +52,7 @@ async def test_single_batched_request_and_parsing() -> None:
         seen.append(req)
         return httpx.Response(200, json=GOOD)
 
-    answers = await client(httpx.MockTransport(handler)).ask({"utterance": "aaj"}, QUESTIONS)
+    answers = await client(httpx.MockTransport(handler)).ask({"utterance": "today"}, QUESTIONS)
 
     assert len(seen) == 1  # A-1: all questions in one call
     assert seen[0].url.path == "/v1/systemone"

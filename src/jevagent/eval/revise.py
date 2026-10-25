@@ -25,7 +25,7 @@ It gave wrong answers on these examples (utterance | expected | got):
 
 Write an improved wording that fixes the cause in general terms. Rules:
 - Do not mention or quote any example utterance, and do not add per-example special cases.
-- Keep the definition's meaning; clarify boundaries and how to treat Hinglish and hedged answers.
+- Keep the definition's meaning; clarify boundaries and how to treat hedged answers.
 - Reply with the new wording only.
 """
 

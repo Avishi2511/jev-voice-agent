@@ -31,7 +31,7 @@ from jevagent.phase_b.agent import LlmEvent, Message, PhaseBAgent, TextDelta, To
 from jevagent.phase_b.tools import MockCrm, RecordingTransfer, ToolDef, ToolRegistry
 from jevagent.script.loader import load_script
 
-SCRIPT = load_script(Path(__file__).parents[2] / "scripts" / "emi_reminder.yaml")
+SCRIPT = load_script(Path(__file__).parents[2] / "scripts" / "emi_reminder_en.yaml")
 SETTINGS = Settings(  # type: ignore[call-arg]
     _env_file=None,
     jev_api_key=SecretStr("k"),
@@ -123,8 +123,8 @@ def test_two_turns_back_to_back() -> None:
 
 
 def test_per_language_silence() -> None:
-    assert silence_ms_for(SETTINGS, "en") == 600
-    assert silence_ms_for(SETTINGS, "hinglish") == 700
+    assert silence_ms_for(SETTINGS, "en") == 700  # only "english" is configured
+    assert silence_ms_for(SETTINGS, "english") == 600
     assert silence_ms_for(SETTINGS, "unknown") == 700
 
 
@@ -192,8 +192,8 @@ def test_ack_policy_never_repeats_and_respects_flags() -> None:
 def rule_jev() -> RuleBasedJev:
     return RuleBasedJev(
         slot_keywords={
-            "identity_confirmed": {"confirmed": ["haan"]},
-            "pay_when": {"today": ["aaj"], "tomorrow": ["kal"]},
+            "identity_confirmed": {"confirmed": ["yes"]},
+            "pay_when": {"today": ["today"], "tomorrow": ["tomorrow"]},
             "payment_mode": {"upi": ["upi"]},
         },
         turn_keywords={"objection": ["penalty"]},
@@ -216,18 +216,18 @@ async def test_speculation_commit_and_discard() -> None:
     ctl.start()
     spec = Speculator(ctl)
 
-    spec.on_partial("haan")
-    spec.on_partial("haan")  # unchanged partial: no second request
-    task = spec.take("haan")
+    spec.on_partial("yes")
+    spec.on_partial("yes")  # unchanged partial: no second request
+    task = spec.take("yes")
     assert task is not None
-    action = await ctl.on_caller_turn("haan", task)
+    action = await ctl.on_caller_turn("yes", task)
     assert jev.calls == 1 and action.clip_id.startswith("pay_when")  # type: ignore[union-attr]
 
-    spec.on_partial("kal")
+    spec.on_partial("tomorrow")
     spec.on_speech_resumed()  # caller continued: discard
-    assert spec.take("kal") is None
-    spec.on_partial("kal")
-    assert spec.take("kal tak") is None  # final text differs: discard
+    assert spec.take("tomorrow") is None
+    spec.on_partial("tomorrow")
+    assert spec.take("by tomorrow") is None  # final text differs: discard
     await asyncio.sleep(0)
     assert ctl.prefetch("x") is not None
     spec.on_partial("   ")  # blank partial ignored
@@ -236,7 +236,7 @@ async def test_speculation_commit_and_discard() -> None:
 async def test_prefetch_none_after_handoff() -> None:
     ctl = Controller(SCRIPT, rule_jev(), SETTINGS, MemoryDecisionLog(), "c", seed=1)
     ctl.start()
-    await ctl.on_caller_turn("penalty kyun")
+    await ctl.on_caller_turn("why the penalty")
     assert ctl.prefetch("anything") is None
 
 
@@ -257,7 +257,7 @@ async def test_timed_jev_and_jsonl(tmp_path: Path) -> None:
     timer.mark("turn_end")
     timer.mark("stt_done")
     jev = TimedJev(rule_jev(), lambda: timer)
-    await jev.ask({"utterance": "haan", "current_step": "identity_confirmed"}, [])
+    await jev.ask({"utterance": "yes", "current_step": "identity_confirmed"}, [])
     timer.mark("first_audio_out")
     sink = JsonlMetrics(tmp_path / "m.jsonl")
     sink.write(timer.timings)
@@ -394,7 +394,7 @@ async def test_greeting_plays_on_start_and_checkpoints(tmp_path: Path) -> None:
 
 
 async def test_happy_path_ends_call_after_closing_clip_plays(tmp_path: Path) -> None:
-    h = await Harness(tmp_path, ["haan ji", "kal kar dunga", "upi se"]).setup()
+    h = await Harness(tmp_path, ["yes that is me", "i will pay tomorrow", "by upi"]).setup()
     for _ in range(3):
         await h.mock.say()
     await asyncio.sleep(0.05)
@@ -409,7 +409,7 @@ async def test_happy_path_ends_call_after_closing_clip_plays(tmp_path: Path) -> 
 
 
 async def test_barge_in_clears_audio_when_caller_speaks_over_greeting(tmp_path: Path) -> None:
-    h = await Harness(tmp_path, ["haan"], auto_played=False).setup()
+    h = await Harness(tmp_path, ["yes"], auto_played=False).setup()
     assert h.mock.session._audio_pending  # noqa: SLF001 - greeting not yet confirmed played
     await h.mock.feed(tone(40, 16000))  # caller starts talking
     assert len(h.mock.events("clearAudio")) == 1
@@ -418,7 +418,7 @@ async def test_barge_in_clears_audio_when_caller_speaks_over_greeting(tmp_path: 
 
 
 async def test_no_clear_when_nothing_is_playing(tmp_path: Path) -> None:
-    h = await Harness(tmp_path, ["haan"]).setup()  # greeting confirmed played
+    h = await Harness(tmp_path, ["yes"]).setup()  # greeting confirmed played
     await h.mock.feed(tone(40, 16000))
     assert h.mock.events("clearAudio") == []
 
@@ -426,21 +426,21 @@ async def test_no_clear_when_nothing_is_playing(tmp_path: Path) -> None:
 async def test_objection_hands_off_and_phase_b_speaks_with_bridge_clip(tmp_path: Path) -> None:
     rounds: list[list[LlmEvent]] = [
         [
-            TextDelta(text="Penalty ke baare mein "),
-            TextDelta(text="batati hoon. "),
-            TextDelta(text="Woh late fee hai."),
+            TextDelta(text="About the penalty, "),
+            TextDelta(text="let me explain. "),
+            TextDelta(text="That is a late fee."),
         ],
-        [TextDelta(text="Theek hai, dhanyavaad.")],
+        [TextDelta(text="Okay, thank you.")],
     ]
-    h = await Harness(tmp_path, ["penalty kyun laga", "samajh gaya"], rounds).setup()
+    h = await Harness(tmp_path, ["why was the penalty charged", "I understand"], rounds).setup()
     await h.mock.say()
     assert h.controller.state.mode.value == "B"
     bridge_ids = [c.id for c in SCRIPT.shared["bridge"]]
     assert any(h.player.pcm(b) in h.mock.audio_since() for b in bridge_ids)
-    assert h.synth.texts == ["Penalty ke baare mein batati hoon.", "Woh late fee hai."]
+    assert h.synth.texts == ["About the penalty, let me explain.", "That is a late fee."]
     mark = len(h.mock.sent)
     await h.mock.say()
-    assert h.synth.texts[-1] == "Theek hai, dhanyavaad."
+    assert h.synth.texts[-1] == "Okay, thank you."
     assert h.mock.audio_since(mark)
     assert h.jev.calls == 1  # Jev not consulted after handoff
 
@@ -449,32 +449,32 @@ async def test_transfer_tool_ends_the_call(tmp_path: Path) -> None:
     rounds: list[list[LlmEvent]] = [
         [ToolCall(id="t", name="transfer_to_human", arguments={"reason": "wants human"})]
     ]
-    h = await Harness(tmp_path, ["penalty kyun"], rounds).setup()
+    h = await Harness(tmp_path, ["why the penalty"], rounds).setup()
     await h.mock.say()
     await asyncio.sleep(0.05)
     assert len(h.transfers.transfers) == 1 and h.mock.closed
 
 
 async def test_barge_in_cancels_phase_b_generation(tmp_path: Path) -> None:
-    rounds: list[list[LlmEvent]] = [[TextDelta(text="Pehli baat. "), TextDelta(text="Doosri")]]
-    h = await Harness(tmp_path, ["penalty kyun"], rounds, hang=True, auto_played=False).setup()
+    rounds: list[list[LlmEvent]] = [[TextDelta(text="First point. "), TextDelta(text="Second")]]
+    h = await Harness(tmp_path, ["why the penalty"], rounds, hang=True, auto_played=False).setup()
     await h.mock.say(wait=False)
     await asyncio.wait_for(h.llm.started.wait(), 2)
     await asyncio.sleep(0.05)
-    assert h.synth.texts == ["Pehli baat."]
+    assert h.synth.texts == ["First point."]
     cleared = len(h.mock.events("clearAudio"))  # the unconfirmed greeting was cleared by `say`
     await h.mock.feed(tone(40, 16000))  # caller interrupts mid-generation
     await asyncio.sleep(0.05)
     assert len(h.mock.events("clearAudio")) == cleared + 1
     await h.mock.wait_idle()
-    assert h.synth.texts == ["Pehli baat."]  # the cancelled reply never spoke "Doosri"
+    assert h.synth.texts == ["First point."]  # the cancelled reply never spoke "Second"
 
 
 async def test_stt_failure_is_reasked_then_hands_off(tmp_path: Path) -> None:
     h = await Harness(
         tmp_path,
         [TranscriptionError("down"), TranscriptionError("down")],
-        [[TextDelta(text="Maaf kijiye.")]],
+        [[TextDelta(text="Sorry about that.")]],
     ).setup()
     await h.mock.say()
     assert h.controller.state.retries.get("identity_confirmed") == 1
@@ -489,7 +489,7 @@ async def test_empty_transcript_is_ignored(tmp_path: Path) -> None:
 
 
 async def test_mulaw_inbound_is_decoded(tmp_path: Path) -> None:
-    h = Harness(tmp_path, ["haan"])
+    h = Harness(tmp_path, ["yes"])
     h.player = await rendered(tmp_path)
     await h.setup()
     assert h.mock.encoding == "audio/x-l16"
@@ -528,14 +528,16 @@ BASELINE = SETTINGS.model_copy(update={"baseline_mode": True})
 
 async def test_baseline_mode_bypasses_phase_a(tmp_path: Path) -> None:
     rounds: list[list[LlmEvent]] = [
-        [TextDelta(text="Aap kab tak payment karenge?")],
+        [TextDelta(text="By when will you pay?")],
         [ToolCall(id="c", name="play_clip", arguments={"clip_id": "closing.ask.1"})],
         [],
     ]
-    h = await Harness(tmp_path, ["haan ji", "kal tak"], rounds, settings=BASELINE).setup()
+    h = await Harness(
+        tmp_path, ["yes that is me", "by tomorrow"], rounds, settings=BASELINE
+    ).setup()
     assert h.mock.audio_since()  # same greeting clip as the hybrid agent
     await h.mock.say()
-    assert h.synth.texts == ["Aap kab tak payment karenge?"]
+    assert h.synth.texts == ["By when will you pay?"]
     await h.mock.say()
     assert h.jev.calls == 0  # Jev never consulted in baseline
     assert h.controller.state.step == "identity_confirmed"  # script engine never advanced
@@ -543,11 +545,11 @@ async def test_baseline_mode_bypasses_phase_a(tmp_path: Path) -> None:
     [row] = h.summaries.rows
     assert row.mode == "baseline" and row.outcome == "completed"
     assert row.turns == 2 and row.stt_requests == 2 and row.jev_requests == 0
-    assert row.tts_chars == len("Aap kab tak payment karenge?")
+    assert row.tts_chars == len("By when will you pay?")
 
 
 async def test_hybrid_summary_counts_usage_and_outcomes(tmp_path: Path) -> None:
-    h = await Harness(tmp_path, ["haan ji", "kal kar dunga", "upi se"]).setup()
+    h = await Harness(tmp_path, ["yes that is me", "i will pay tomorrow", "by upi"]).setup()
     for _ in range(3):
         await h.mock.say()
     await asyncio.sleep(0.05)
@@ -562,7 +564,7 @@ async def test_summary_records_handoff_and_transfer(tmp_path: Path) -> None:
     rounds: list[list[LlmEvent]] = [
         [ToolCall(id="t", name="transfer_to_human", arguments={"reason": "wants human"})]
     ]
-    h = await Harness(tmp_path, ["penalty kyun"], rounds).setup()
+    h = await Harness(tmp_path, ["why the penalty"], rounds).setup()
     await h.mock.say()
     await asyncio.sleep(0.05)
     await h.mock.session.on_stop()
@@ -644,21 +646,21 @@ def test_percentile_and_comparison_report() -> None:
 
 async def test_shadow_beside_baseline_and_transcript_capture(tmp_path: Path) -> None:
     rounds: list[list[LlmEvent]] = [
-        [TextDelta(text="Aap kab tak payment karenge?")],
-        [TextDelta(text="Theek hai.")],
+        [TextDelta(text="By when will you pay?")],
+        [TextDelta(text="Alright.")],
     ]
     h = await Harness(
-        tmp_path, ["haan ji", "kal tak"], rounds, settings=BASELINE, with_shadow=True
+        tmp_path, ["yes that is me", "by tomorrow"], rounds, settings=BASELINE, with_shadow=True
     ).setup()
     await h.mock.say()
     await h.mock.say()
     await h.mock.session.on_stop()
     # live call is the baseline LLM; Jev only ran in the shadow controller
-    assert h.synth.texts == ["Aap kab tak payment karenge?", "Theek hai."]
+    assert h.synth.texts == ["By when will you pay?", "Alright."]
     assert h.jev.calls == 0
     assert [t.would_do for t in h.shadow_sink.rows] == ["clip", "clip"]
     assert h.shadow_sink.rows[1].slots["pay_date_bucket"] == "tomorrow"
     assert h.shadow_sink.rows[0].stt_ms is not None
     lines = h.transcript_sink.rows["c1"]
-    assert lines[0].startswith("agent: ") and "caller: haan ji" in lines
-    assert "agent: Aap kab tak payment karenge?" in lines
+    assert lines[0].startswith("agent: ") and "caller: yes that is me" in lines
+    assert "agent: By when will you pay?" in lines

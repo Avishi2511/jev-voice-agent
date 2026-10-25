@@ -1,6 +1,6 @@
 """Render script clips with Gemini TTS. Spends TTS quota: run deliberately.
 
-uv run python scripts/gen_clips.py scripts/emi_reminder.yaml
+uv run python scripts/gen_clips.py scripts/emi_reminder_en.yaml
 """
 
 import asyncio

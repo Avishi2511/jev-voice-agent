@@ -13,12 +13,12 @@ from jevagent.script.loader import load_script
 
 pytestmark = pytest.mark.skipif(not os.getenv("JEV_API_KEY"), reason="JEV_API_KEY not set")
 
-UTTERANCES = ["haan ji main bol raha hoon", "pata nahi, shayad kal", "aap kaun bol rahe ho?"]
+UTTERANCES = ["yes, speaking", "not sure, maybe tomorrow", "who is this?"]
 
 
 @pytest.mark.parametrize("utterance", UTTERANCES)
 async def test_live_answers_are_well_formed(utterance: str) -> None:
-    script = load_script("scripts/emi_reminder.yaml")
+    script = load_script("scripts/emi_reminder_en.yaml")
     state = ScriptEngine(script, seed=1).initial_state()
     questions = build_questions(script, state)
     settings = Settings(jev_api_key=SecretStr(os.environ["JEV_API_KEY"]))  # type: ignore[call-arg]

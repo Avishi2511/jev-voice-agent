@@ -1,12 +1,12 @@
-"""Phase 6k spike: does Gemini handle Hinglish for STT and TTS well enough? Spends quota.
+"""Phase 6k spike: is Gemini STT/TTS good enough on phone-quality English? Spends quota.
 
-Round trip: Hinglish text -> Gemini TTS -> 8 kHz audio -> Gemini STT -> compare with the input.
+Round trip: English text -> Gemini TTS -> 8 kHz audio -> Gemini STT -> compare with the input.
 Also checks the configured models exist for the key, and prints latencies.
 
-    uv run python scripts/hinglish_spike.py
-    uv run python scripts/hinglish_spike.py --wav my_recording.wav   # transcribe a real recording
+    uv run python scripts/speech_spike.py
+    uv run python scripts/speech_spike.py --wav my_recording.wav   # transcribe a real recording
 
-Results go to logs/hinglish_spike.md. Round-tripped synthetic speech is an optimistic test:
+Results go to logs/speech_spike.md. Round-tripped synthetic speech is an optimistic test:
 also run it on real caller recordings before trusting the numbers.
 """
 
@@ -26,16 +26,16 @@ from jevagent.frontend.stt import GeminiTranscriber
 from jevagent.frontend.tts import GeminiSynthesizer
 
 SENTENCES = [
-    "haan ji main bol raha hoon",
-    "kal tak payment kar dunga",
-    "UPI se kar dunga, aaj shaam tak",
-    "pehle penalty ka bataiye, wo kyun laga",
-    "mera EMI paanch hazaar rupaye hai na",
-    "main kal nahi, parso payment karunga",
-    "ek second, main net banking check karta hoon",
-    "aap kaun bol rahe ho, mujhe agent se baat karni hai",
-    "pandrah tareekh ko salary aati hai, uske baad kar dunga",
-    "nahi nahi, ye galat number hai",
+    "yes, this is me speaking",
+    "I will pay by tomorrow",
+    "I'll pay by UPI this evening",
+    "first tell me about the penalty, why was I charged",
+    "my EMI is five thousand rupees, right",
+    "no, not tomorrow, the day after",
+    "let me check my net banking for a second",
+    "who is this, I want to talk to an agent",
+    "I get my salary on the fifteenth, I will pay after that",
+    "no, you have the wrong number",
 ]
 
 
@@ -62,7 +62,7 @@ async def main() -> None:
         },
     )
     stt = GeminiTranscriber(client, settings.gemini_stt_model)
-    lines = ["# Hinglish spike", ""]
+    lines = ["# Speech spike", ""]
 
     if args.wav:
         pcm, rate = wav_to_pcm16(Path(args.wav).read_bytes())
@@ -90,7 +90,7 @@ async def main() -> None:
             f"mean similarity {sum(scores) / len(scores):.2f} over {len(scores)} sentences",
         ]
 
-    out = Path("logs/hinglish_spike.md")
+    out = Path("logs/speech_spike.md")
     out.parent.mkdir(exist_ok=True)
     out.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n".join(lines))

@@ -23,8 +23,8 @@ and is skipped without `JEV_API_KEY`.
 | --- | --- | --- |
 | Type a call, real Jev (Phase A) and Gemini (Phase B) | `uv run python -m jevagent.frontend.console` | Jev key; Gemini key for Phase B |
 | Jev only, prints every answer and confidence | `uv run python demo.py` | Jev key |
-| Is Gemini good enough at Hinglish? | `uv run python scripts/hinglish_spike.py` | Gemini key |
-| Render clip audio | `uv run python scripts/gen_clips.py scripts/emi_reminder.yaml` | Gemini key |
+| Is Gemini STT/TTS good enough on your callers? | `uv run python scripts/speech_spike.py` | Gemini key |
+| Render clip audio | `uv run python scripts/gen_clips.py scripts/emi_reminder_en.yaml` | Gemini key |
 | Run the phone server | `uv run python -m jevagent.frontend.server` | both keys, clips, `PUBLIC_URL` |
 
 ## Layout

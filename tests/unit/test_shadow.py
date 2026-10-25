@@ -22,15 +22,15 @@ from jevagent.observability.decision_log import JsonlDecisionLog, MemoryDecision
 from jevagent.observability.summary import CallSummary, JsonlTranscripts, MemoryTranscripts
 from jevagent.script.loader import load_script
 
-SCRIPT = load_script(Path(__file__).parents[2] / "scripts" / "emi_reminder.yaml")
+SCRIPT = load_script(Path(__file__).parents[2] / "scripts" / "emi_reminder_en.yaml")
 SETTINGS = Settings(_env_file=None, jev_api_key=SecretStr("k"))  # type: ignore[call-arg]
 
 
 def rule_jev() -> RuleBasedJev:
     return RuleBasedJev(
         slot_keywords={
-            "identity_confirmed": {"confirmed": ["haan"]},
-            "pay_when": {"today": ["aaj"], "tomorrow": ["kal"]},
+            "identity_confirmed": {"confirmed": ["yes"]},
+            "pay_when": {"today": ["today"], "tomorrow": ["tomorrow"]},
             "payment_mode": {"upi": ["upi"]},
         },
         turn_keywords={"objection": ["penalty"]},
@@ -45,7 +45,9 @@ def recorder(call_id: str = "c1", jev: object = None) -> tuple[ShadowRecorder, M
 
 async def test_shadow_logs_what_phase_a_would_do() -> None:
     rec, sink = recorder()
-    for i, text in enumerate(["haan ji", "kal tak", "penalty kyun laga"], start=1):
+    for i, text in enumerate(
+        ["yes that is me", "by tomorrow", "why was the penalty charged"], start=1
+    ):
         rec.submit(text, metric_turn=i, stt_ms=100.0)
     await rec.close()
     assert [t.would_do for t in sink.rows] == ["clip", "clip", "handoff"]
@@ -58,13 +60,13 @@ async def test_shadow_logs_what_phase_a_would_do() -> None:
 
 async def test_shadow_turns_after_handoff_and_end() -> None:
     rec, sink = recorder()
-    for text in ["penalty kyun", "haan"]:
+    for text in ["why the penalty", "yes"]:
         rec.submit(text, metric_turn=1)
     await rec.close()
     assert [t.would_do for t in sink.rows] == ["handoff", "phase_b"]
 
     rec, sink = recorder("c2")
-    for text in ["haan", "aaj", "upi"]:
+    for text in ["yes", "today", "upi"]:
         rec.submit(text, metric_turn=1)
     await rec.close()
     assert sink.rows[-1].would_do == "end"
@@ -75,8 +77,8 @@ async def test_shadow_failure_never_propagates() -> None:
         raise RuntimeError("jev exploded")
 
     rec, sink = recorder(jev=ScriptedJev(handler=boom))
-    rec.submit("haan", metric_turn=1)
-    rec.submit("haan", metric_turn=2)
+    rec.submit("yes", metric_turn=1)
+    rec.submit("yes", metric_turn=2)
     await rec.close()  # no exception
     assert sink.rows == []
 
@@ -213,7 +215,7 @@ async def test_export_joins_decisions_with_outcomes(tmp_path: Path) -> None:
     for call in ("known", "unknown"):
         ctl = Controller(SCRIPT, rule_jev(), SETTINGS, JsonlDecisionLog(path), call, seed=1)
         ctl.start()
-        await ctl.on_caller_turn("haan ji")
+        await ctl.on_caller_turn("yes that is me")
     rows = export_rows(
         load_decisions(path),
         [CallSummary(call_id="known", mode="hybrid", outcome="completed")],
@@ -223,7 +225,7 @@ async def test_export_joins_decisions_with_outcomes(tmp_path: Path) -> None:
     assert row["call_id"] == "known" and row["call_outcome"] == "completed"
     assert row["label_source"] == "model_decision"
     assert row["answers"]["answered_step"]["confidence"] > 0
-    assert row["state"]["utterance"] == "haan ji" and row["action"]["type"] == "PlayClip"
+    assert row["state"]["utterance"] == "yes that is me" and row["action"]["type"] == "PlayClip"
     out = tmp_path / "export.jsonl"
     write_jsonl(out, rows)
     assert out.read_text(encoding="utf-8").count("\n") == 1

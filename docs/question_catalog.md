@@ -30,9 +30,9 @@ and must be re-tuned when the pinned Jev model changes.
 
 ## Candidate parsers (A-5)
 
-Dates (numeric, "15th March", "March 15", "pandrah tareekh"), amounts (digits, `k`, lakh/hazaar, Hindi number words),
-phones (10-digit Indian mobiles, spoken digit words). Hindi number words cover 0-31, round tens, and sau/hazaar/lakh;
-other compound numbers (e.g. 47) are not parsed yet.
+Dates (numeric, "15th March", "March 15", "the 15th"), amounts (digits, `k`, thousand, lakh, English number words such as
+"five thousand"), phones (10-digit Indian mobiles, spoken digit words). Number words are additive ("twenty five" = 25) with
+hundred / thousand / lakh / million multipliers; a date needs its day as digits.
 
 ## Catalog status (emi_reminder, pinned model `jev-1.14.0`)
 

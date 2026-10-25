@@ -2,7 +2,7 @@
 
     uv run python scripts/benchmark_llm.py data/llm_cases.jsonl MODEL_A MODEL_B
 
-Each line of the cases file is a BenchCase (see jevagent.eval.llm_bench). Use real Hinglish
+Each line of the cases file is a BenchCase (see jevagent.eval.llm_bench). Use real
 transcripts; results on invented cases say little.
 """
 

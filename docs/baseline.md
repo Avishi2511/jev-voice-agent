@@ -9,11 +9,11 @@ STT -> Gemini LLM (same system prompt, tools and clips rule as Phase B) -> Gemin
 VAD, barge-in), same tools, no Jev, no script engine, no acknowledgement clips.
 
 ## How to collect it
-1. Fill `.env` (Gemini, Jev not needed for baseline calls, `PUBLIC_URL`), render clips: `uv run python scripts/gen_clips.py scripts/emi_reminder.yaml`.
+1. Fill `.env` (Gemini, Jev not needed for baseline calls, `PUBLIC_URL`), render clips: `uv run python scripts/gen_clips.py scripts/emi_reminder_en.yaml`.
 2. `BASELINE_MODE=true uv run python -m jevagent.frontend.server`, place N pilot calls.
 3. Same again with `BASELINE_MODE=false` (hybrid) for the A/B comparison later.
 4. `uv run python scripts/compare_modes.py rates.yaml` (your unit prices in `rates.yaml`).
-5. Choose the Phase B model: `uv run python scripts/benchmark_llm.py data/llm_cases.jsonl <model> <model>` on real Hinglish transcripts.
+5. Choose the Phase B model: `uv run python scripts/benchmark_llm.py data/llm_cases.jsonl <model> <model>` on real transcripts.
 
 ## Results (fill from the report)
 | mode | calls | completion | transferred | handed off | TTFA P50 ms | TTFA P95 ms | cost/call |

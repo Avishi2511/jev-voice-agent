@@ -38,28 +38,34 @@ QV = QuestionVersion(key="turn_type", version=1, instruction="Classify the calle
 
 
 def test_overfit_detection() -> None:
-    assert overfits("treat 'pehle penalty ka bataiye' as objection", ["Pehle penalty ka bataiye"])
-    assert overfits("pushback about fees is an objection", ["penalty kyun"]) is None
+    assert overfits(
+        "treat 'first tell me about the penalty' as objection", ["First tell me about the penalty"]
+    )
+    assert overfits("pushback about fees is an objection", ["why the penalty"]) is None
     assert overfits("say ok is on_script", ["ok"]) is None  # short utterances are not quotable
 
 
 async def test_general_revision_returns_draft_and_diff() -> None:
     llm = FakeLlm("Classify the utterance; disputes about charges are objections.")
     draft, diff = await propose_revision(
-        llm, QV, "objection: caller disputes or pushes back", [miss("wo penalty kyun laga")], 2
+        llm,
+        QV,
+        "objection: caller disputes or pushes back",
+        [miss("why was the penalty charged")],
+        2,
     )
     assert draft.version == 2 and draft.status == "draft" and draft.key == "turn_type"
     assert "disputes about charges" in draft.instruction
     assert "-Classify the caller's utterance." in diff and "+Classify the utterance;" in diff
     prompt = llm.prompts[0]
-    assert "wo penalty kyun laga | objection | on_script" in prompt
+    assert "why was the penalty charged | objection | on_script" in prompt
     assert "objection: caller disputes or pushes back" in prompt
 
 
 async def test_quoting_a_failing_utterance_is_rejected() -> None:
-    llm = FakeLlm("If caller says wo penalty kyun laga then objection")
+    llm = FakeLlm("If caller says why was the penalty charged then objection")
     with pytest.raises(RevisionRejected, match="quotes"):
-        await propose_revision(llm, QV, "def", [miss("wo penalty kyun laga")], 2)
+        await propose_revision(llm, QV, "def", [miss("why was the penalty charged")], 2)
 
 
 async def test_empty_reply_rejected() -> None:

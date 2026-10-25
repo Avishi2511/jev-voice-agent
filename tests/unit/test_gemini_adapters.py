@@ -98,10 +98,10 @@ def test_stream_resampler_is_chunk_safe() -> None:
 
 
 async def test_gemini_transcriber_request_and_result() -> None:
-    client, inter = client_with([NS(output_text="  haan ji  ")])
+    client, inter = client_with([NS(output_text="  yes that is me  ")])
     pcm = audio.tone(100, 16000)
     text = await GeminiTranscriber(client, "gemini-3.5-transcribe").transcribe(pcm, 16000)
-    assert text == "haan ji"
+    assert text == "yes that is me"
     req = inter.requests[0]
     assert req["model"] == "gemini-3.5-transcribe"
     audio_item = req["input"][1]
@@ -131,10 +131,10 @@ async def test_fake_transcriber() -> None:
 async def test_synthesize_converts_24k_wav_to_8k_pcm() -> None:
     wav = audio.pcm16_to_wav(audio.tone(300, 24000), 24000)
     client, inter = client_with([NS(output_audio=NS(data=base64.b64encode(wav).decode()))])
-    pcm = await GeminiSynthesizer(client, "gemini-3.8-flash-tts", "Kore").synthesize("Namaste")
+    pcm = await GeminiSynthesizer(client, "gemini-3.8-flash-tts", "Kore").synthesize("Hello")
     assert len(pcm) == 8000 * 2 * 300 // 1000
     req = inter.requests[0]
-    assert req["input"] == "Namaste" and req["response_format"] == {"type": "audio"}
+    assert req["input"] == "Hello" and req["response_format"] == {"type": "audio"}
     assert req["generation_config"] == {"speech_config": [{"voice": "Kore"}]}
 
 
@@ -189,7 +189,7 @@ async def test_llm_streams_text_and_accumulates_function_args() -> None:
         ),
         NS(event_type="step.stop"),
         NS(event_type="step.start", step=NS(type="model_output")),
-        NS(event_type="step.delta", delta=NS(type="text", text="Theek hai.")),
+        NS(event_type="step.delta", delta=NS(type="text", text="Alright.")),
         NS(event_type="step.stop"),
         NS(
             event_type="interaction.completed", interaction=NS(id="int-1", status="requires_action")
@@ -204,7 +204,7 @@ async def test_llm_streams_text_and_accumulates_function_args() -> None:
     out = [e async for e in llm.stream(messages, TOOLS)]
     assert out == [
         ToolCall(id="c1", name="explain_charges", arguments={"charge_type": "penalty"}),
-        TextDelta(text="Theek hai."),
+        TextDelta(text="Alright."),
     ]
     req = inter.requests[0]
     assert req["system_instruction"] == "SYS" and req["input"] == "penalty kya hai"

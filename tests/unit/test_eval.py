@@ -31,7 +31,7 @@ from jevagent.eval.versions import (
 from jevagent.models import JevAnswer, JevQuestion, JsonDict
 from jevagent.script.loader import load_script
 
-SCRIPT = load_script(Path(__file__).parents[2] / "scripts" / "emi_reminder.yaml")
+SCRIPT = load_script(Path(__file__).parents[2] / "scripts" / "emi_reminder_en.yaml")
 SETTINGS = Settings(_env_file=None, jev_api_key=SecretStr("k"))  # type: ignore[call-arg]
 
 
@@ -51,12 +51,12 @@ def turn(call: str, n: int, utt: str, step: str = "pay_when", **over: object) ->
 
 
 def dataset() -> list[LabelledTurn]:
-    turns = [turn(f"c{i}", 1, f"kal {i}") for i in range(30)]
+    turns = [turn(f"c{i}", 1, f"tomorrow {i}") for i in range(30)]
     turns.append(
         turn(
             "obj",
             1,
-            "penalty kyun",
+            "why the penalty",
             labels={
                 "answered_step": "no",
                 "slot_value:pay_when": "not_stated",
@@ -69,7 +69,7 @@ def dataset() -> list[LabelledTurn]:
         turn(
             "cor",
             1,
-            "galat, parso",
+            "wrong, the day after",
             labels={
                 "answered_step": "yes",
                 "slot_value:pay_when": "later",
@@ -212,7 +212,7 @@ async def test_perfect_oracle_scores_perfectly() -> None:
 
 async def test_rare_class_misses_hidden_by_overall_accuracy() -> None:
     turns = dataset()
-    jev = OracleJev(turns, wrong={"turn_type", "penalty kyun"})
+    jev = OracleJev(turns, wrong={"turn_type", "why the penalty"})
     report = await run_eval(SCRIPT, turns, jev, SETTINGS)
     tt = report.groups["turn_type"]
     assert tt.accuracy > 0.9  # looks great overall...
@@ -294,7 +294,7 @@ async def test_promotion_requires_validation_pass(tmp_path: Path) -> None:
 async def test_failed_rare_recall_blocks_promotion(tmp_path: Path) -> None:
     turns = dataset()
     report = await run_eval(
-        SCRIPT, turns, OracleJev(turns, wrong={"turn_type", "penalty kyun"}), SETTINGS
+        SCRIPT, turns, OracleJev(turns, wrong={"turn_type", "why the penalty"}), SETTINGS
     )
     path = save_version(
         tmp_path, "emi", QuestionVersion(key="turn_type", version=1, instruction="v1")

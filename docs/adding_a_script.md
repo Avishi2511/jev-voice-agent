@@ -6,7 +6,7 @@ Jev never writes words or picks clips.
 ## Structure
 ```yaml
 name: my_call
-language: hinglish            # selects turn-silence settings (hinglish / en / default)
+language: english            # selects turn-silence settings (english / default)
 thresholds: {default: 0.7}    # per question key; per-step overrides allowed
 max_retries: 1                # re-asks before handing off
 steps:

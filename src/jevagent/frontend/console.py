@@ -19,6 +19,7 @@ from jevagent.controller.controller import Controller, PassToPhaseB, PlayClip, S
 from jevagent.frontend.llm import GeminiLlmClient
 from jevagent.jev.client import HttpJevClient
 from jevagent.observability.decision_log import DecisionRecord, JsonlDecisionLog
+from jevagent.observability.logging import configure_logging
 from jevagent.phase_b.agent import PhaseBAgent, Say, Transferred
 from jevagent.phase_b.tools import MockCrm, RecordingTransfer, ToolRegistry
 from jevagent.script.loader import load_script
@@ -52,6 +53,7 @@ async def main() -> None:
     ap.add_argument("--quiet", action="store_true", help="do not echo Jev answers per turn")
     args = ap.parse_args()
     settings = Settings()
+    configure_logging(settings.log_level)
     if not settings.jev_api_key.get_secret_value():
         sys.exit("JEV_API_KEY is not set (put it in .env)")
     script = load_script(settings.script_path)

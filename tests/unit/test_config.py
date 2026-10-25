@@ -27,3 +27,24 @@ def test_example_env_file_loads() -> None:
     assert s.jev_model == "jev-1.14.0"
     assert s.ab_hybrid_percent is None and s.baseline_mode is False and s.shadow_mode is False
     assert s.public_url == "" and s.save_transcripts is False
+
+
+def test_log_level_filters_debug(capsys: pytest.CaptureFixture[str]) -> None:
+    import structlog
+
+    from jevagent.observability.logging import configure_logging
+
+    try:
+        configure_logging("INFO")
+        log = structlog.get_logger("t")
+        log.debug("quiet_event")
+        log.info("loud_event")
+        out = capsys.readouterr().out
+        assert "quiet_event" not in out and "loud_event" in out
+        configure_logging("debug")
+        structlog.get_logger("t").debug("now_visible")
+        assert "now_visible" in capsys.readouterr().out
+        with pytest.raises(ValueError, match="unknown log level"):
+            configure_logging("chatty")
+    finally:
+        structlog.reset_defaults()

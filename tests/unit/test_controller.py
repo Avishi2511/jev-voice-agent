@@ -25,7 +25,7 @@ from jevagent.observability.decision_log import JsonlDecisionLog, MemoryDecision
 from jevagent.script.engine import ScriptEngine
 from jevagent.script.loader import load_script
 
-SCRIPT = load_script(Path(__file__).parents[2] / "scripts" / "emi_reminder.yaml")
+SCRIPT = load_script(Path(__file__).parents[2] / "scripts" / "emi_reminder_en.yaml")
 SETTINGS = Settings(_env_file=None, jev_api_key=SecretStr("k"))  # type: ignore[call-arg]
 TOOLS = ["get_loan_account", "explain_charges", "schedule_callback", "transfer_to_human"]
 
@@ -106,12 +106,12 @@ def make(jev: JevClient, log: MemoryDecisionLog | JsonlDecisionLog | None = None
 def rule_jev() -> RuleBasedJev:
     return RuleBasedJev(
         slot_keywords={
-            "identity_confirmed": {"confirmed": ["haan", "yes"], "denied": ["nahi"]},
-            "pay_when": {"today": ["aaj"], "tomorrow": ["kal"]},
+            "identity_confirmed": {"confirmed": ["yes", "yes"], "denied": ["no"]},
+            "pay_when": {"today": ["today"], "tomorrow": ["tomorrow"]},
             "payment_mode": {"upi": ["upi"], "net_banking": ["net banking"]},
         },
-        turn_keywords={"objection": ["penalty"], "question": ["kyun"], "wants_human": ["agent"]},
-        correction_words=["galat", "wrong"],
+        turn_keywords={"objection": ["penalty"], "question": ["why"], "wants_human": ["agent"]},
+        correction_words=["wrong", "wrong"],
     )
 
 
@@ -133,7 +133,7 @@ async def test_happy_path_clip_sequence() -> None:
     log = MemoryDecisionLog()
     ctl = make(rule_jev(), log)
     seq = [ctl.start()]
-    for utt in ["haan ji", "kal kar dunga", "upi se"]:
+    for utt in ["yes that is me", "i will pay tomorrow", "by upi"]:
         action = await ctl.on_caller_turn(utt)
         assert isinstance(action, PlayClip)
         seq.append(action)
@@ -157,8 +157,8 @@ async def test_reask_then_handoff_on_unclear() -> None:
 async def test_objection_hands_off_with_packet_matching_prd_shape() -> None:
     ctl = make(rule_jev())
     ctl.start()
-    await ctl.on_caller_turn("haan ji")
-    action = await ctl.on_caller_turn("pehle penalty ka bataiye, wo kyun laga?")
+    await ctl.on_caller_turn("yes that is me")
+    action = await ctl.on_caller_turn("first tell me about the penalty, why was it charged?")
     assert isinstance(action, StartHandoff)
     packet = action.packet
     assert packet.handoff_reason == "turn_type=objection"
@@ -167,7 +167,7 @@ async def test_objection_hands_off_with_packet_matching_prd_shape() -> None:
     assert packet.missing == ["pay_date_bucket", "payment_mode"]
     assert packet.tools == TOOLS
     assert packet.clips_played[0].startswith("identity.ask")
-    assert packet.recent_turns[-1].startswith("caller: pehle penalty")
+    assert packet.recent_turns[-1].startswith("caller: first tell me about the penalty")
     assert any(t.startswith("agent: ") for t in packet.recent_turns)
     assert HandoffPacket.model_validate(json.loads(packet.model_dump_json())) == packet
     assert set(packet.model_dump()) == {
@@ -183,8 +183,8 @@ async def test_objection_hands_off_with_packet_matching_prd_shape() -> None:
 async def test_correction_hands_off() -> None:
     ctl = make(rule_jev())
     ctl.start()
-    await ctl.on_caller_turn("haan ji")
-    action = await ctl.on_caller_turn("galat, kal nahi")
+    await ctl.on_caller_turn("yes that is me")
+    action = await ctl.on_caller_turn("wrong, not tomorrow")
     assert isinstance(action, StartHandoff)
     assert action.packet.handoff_reason == "corrects_stored=yes"
 
@@ -194,11 +194,11 @@ async def test_no_way_back_to_phase_a_and_jev_not_called() -> None:
     log = MemoryDecisionLog()
     ctl = make(jev, log)
     ctl.start()
-    await ctl.on_caller_turn("haan")
-    await ctl.on_caller_turn("kyun?")
+    await ctl.on_caller_turn("yes")
+    await ctl.on_caller_turn("why?")
     assert ctl.state.mode is Mode.B
     calls, records = len(jev.requests), len(log.records)
-    for utt in ["haan", "kal", "upi"]:  # would all fill slots if Phase A were still live
+    for utt in ["yes", "tomorrow", "upi"]:  # would all fill slots if Phase A were still live
         assert await ctl.on_caller_turn(utt) == PassToPhaseB(utterance=utt)
     assert ctl.state.mode is Mode.B
     assert len(jev.requests) == calls and len(log.records) == records
@@ -221,7 +221,7 @@ async def test_early_fill_through_controller() -> None:
     )
     ctl = make(jev)
     ctl.start()
-    await ctl.on_caller_turn("haan, upi se dunga")
+    await ctl.on_caller_turn("yes, I will pay by upi")
     assert ctl.state.slots["payment_mode"].value == "upi"
     assert ctl.state.step == "pay_when"
 
@@ -229,8 +229,8 @@ async def test_early_fill_through_controller() -> None:
 async def test_jev_returning_nothing_reasks_then_hands_off() -> None:
     ctl = make(ScriptedJev(handler=lambda s, q: {}))
     ctl.start()
-    assert isinstance(await ctl.on_caller_turn("haan"), PlayClip)
-    action = await ctl.on_caller_turn("haan")
+    assert isinstance(await ctl.on_caller_turn("yes"), PlayClip)
+    action = await ctl.on_caller_turn("yes")
     assert isinstance(action, StartHandoff)
     assert action.packet.handoff_reason == HandoffReason.LOW_CONFIDENCE.value
 
@@ -239,9 +239,9 @@ async def test_caller_after_closing_hands_off_without_calling_jev() -> None:
     log = MemoryDecisionLog()
     ctl = make(rule_jev(), log)
     ctl.start()
-    for utt in ["haan", "aaj", "upi"]:
+    for utt in ["yes", "today", "upi"]:
         await ctl.on_caller_turn(utt)
-    action = await ctl.on_caller_turn("ek minute")
+    action = await ctl.on_caller_turn("one minute")
     assert isinstance(action, StartHandoff)
     assert action.packet.handoff_reason == "terminal_step=closing"
     assert log.records[-1].questions == []
@@ -262,12 +262,12 @@ async def test_decision_log_is_complete(tmp_path: Path) -> None:
     path = tmp_path / "logs" / "d.jsonl"
     ctl = make(rule_jev(), JsonlDecisionLog(path))
     ctl.start()
-    await ctl.on_caller_turn("haan ji")
+    await ctl.on_caller_turn("yes that is me")
     rec = json.loads(path.read_text(encoding="utf-8").splitlines()[0])
     assert rec["call_id"] == "c1" and rec["turn"] == 1
     assert rec["model_version"] == "jev-1.14.0"
     assert rec["timestamp"].startswith("2026-01-01")
-    assert rec["state_sent"]["utterance"] == "haan ji"
+    assert rec["state_sent"]["utterance"] == "yes that is me"
     assert {q["key"] for q in rec["questions"]} == set(rec["answers"])
     assert rec["answers"]["answered_step"]["confidence"] > 0
     assert rec["action"]["type"] == "PlayClip"

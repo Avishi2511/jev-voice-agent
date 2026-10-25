@@ -10,9 +10,8 @@ from jevagent.frontend.audio import pcm16_to_wav
 log = structlog.get_logger(__name__)
 
 PROMPT = (
-    "Transcribe this phone-call audio verbatim. The speaker uses Hindi, English or a mix "
-    "(Hinglish); write Hindi words in Roman script as they are spoken. Domain words include "
-    "EMI, UPI, net banking, penalty, loan, payment, tareekh. Return only the transcript text. "
+    "Transcribe this phone-call audio verbatim. The speaker uses English. Domain words "
+    "include EMI, UPI, net banking, penalty, loan, payment. Return only the transcript text. "
     "If there is no intelligible speech, return nothing."
 )
 

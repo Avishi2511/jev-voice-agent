@@ -16,7 +16,7 @@ Copy `.env.example` to `.env`. Required: `JEV_API_KEY`, `GEMINI_API_KEY`, `PUBLI
 | `APP_ENV` | `dev` / `staging` / `prod`. `jev-latest` is rejected outside dev. |
 | `JEV_MODEL` | Pinned Jev version (`jev-1.14.0`). Thresholds are tuned per version: re-run eval before changing. |
 | `GEMINI_STT_MODEL`, `GEMINI_LLM_MODEL`, `GEMINI_TTS_MODEL`, `GEMINI_TTS_VOICE` | Pinned at startup against the key's model list; the server refuses to start if one is missing. |
-| `SCRIPT_PATH` | Script YAML (default `scripts/emi_reminder.yaml`). |
+| `SCRIPT_PATH` | Script YAML (default `scripts/emi_reminder_en.yaml`). |
 | `BASELINE_MODE` | `true`: plain LLM agent, Phase A bypassed. |
 | `SHADOW_MODE` | `true` (needs `BASELINE_MODE`): Phase A runs silently beside the baseline, logging to `logs/shadow.jsonl`. |
 | `AB_HYBRID_PERCENT` | 0-100: share of calls routed to hybrid; unset means use `BASELINE_MODE` as set. |
@@ -32,7 +32,7 @@ Copy `.env.example` to `.env`. Required: `JEV_API_KEY`, `GEMINI_API_KEY`, `PUBLI
 
 ## Rollout order (PRD stages)
 1. Offline: `uv run pytest`; console check `uv run python -m jevagent.frontend.console`.
-2. Hinglish spike: `uv run python scripts/hinglish_spike.py` (and `--wav` on real recordings). Do not go further if quality is poor.
+2. Speech spike: `uv run python scripts/speech_spike.py` (and `--wav` on real recordings). Do not go further if quality is poor.
 3. Label turns, freeze, tune: `docs/labelling_guide.md`, then `python -m jevagent.eval.cli --data data/turns.jsonl`.
 4. Baseline calls (`BASELINE_MODE=true`), then `scripts/compare_modes.py`. Record numbers in `docs/baseline.md`.
 5. Shadow (`SHADOW_MODE=true BASELINE_MODE=true`), then `scripts/shadow_report.py truth.jsonl`.
