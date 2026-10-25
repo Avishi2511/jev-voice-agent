@@ -1,0 +1,53 @@
+name: emi_reminder
+language: hinglish
+thresholds:
+  default: 0.7
+max_retries: 1
+steps:
+  - id: identity_confirmed
+    slot: identity
+    clips:
+      ask:
+        - {id: identity.ask.1, text: "Namaste, kya meri baat {name} ji se ho rahi hai?"}
+        - {id: identity.ask.2, text: "Hello, main {name} ji se baat kar rahi hoon, sahi?"}
+      re_ask:
+        - {id: identity.re_ask.1, text: "Maaf kijiye, kya aap {name} ji bol rahe hain?"}
+        - {id: identity.re_ask.2, text: "Kya main {name} ji se hi baat kar rahi hoon?"}
+    questions:
+      slot_value:
+        type: choice
+        instruction: "Does the caller confirm they are the named customer?"
+        options: [confirmed, denied, unclear]
+  - id: pay_when
+    slot: pay_date_bucket
+    clips:
+      ask:
+        - {id: pay_when.ask.1, text: "Aapki EMI due hai. Aap payment kab tak kar denge?"}
+        - {id: pay_when.ask.2, text: "EMI ke baare mein, payment kab tak ho jayegi?"}
+      re_ask:
+        - {id: pay_when.re_ask.1, text: "Kya aap bata sakte hain, payment kis din tak karenge?"}
+        - {id: pay_when.re_ask.2, text: "Payment aaj, kal, ya is hafte mein kab karenge?"}
+    questions:
+      slot_value:
+        type: choice
+        instruction: "When does the caller say they will pay?"
+        options: [today, tomorrow, this_week, later, not_stated]
+  - id: payment_mode
+    slot: payment_mode
+    clips:
+      ask:
+        - {id: payment_mode.ask.1, text: "Aap payment UPI se karenge ya online banking se?"}
+        - {id: payment_mode.ask.2, text: "Payment kis tareeke se karenge, UPI ya net banking?"}
+      re_ask:
+        - {id: payment_mode.re_ask.1, text: "UPI, net banking, ya cash, kaunsa tareeka rahega?"}
+        - {id: payment_mode.re_ask.2, text: "Kaunse mode se payment karenge?"}
+    questions:
+      slot_value:
+        type: choice
+        instruction: "Which payment mode does the caller say they will use?"
+        options: [upi, net_banking, cash, not_stated]
+  - id: closing
+    clips:
+      ask:
+        - {id: closing.ask.1, text: "Dhanyavaad, aapka din shubh ho."}
+        - {id: closing.ask.2, text: "Shukriya, aapka samay dene ke liye dhanyavaad."}
