@@ -10,6 +10,7 @@ from typing import Any
 
 import structlog
 
+from jevagent.observability.summary import Usage
 from jevagent.phase_b.agent import LlmEvent, Message, TextDelta, ToolCall
 from jevagent.phase_b.tools import ToolDef
 
@@ -35,9 +36,10 @@ async def check_models(client: Any, required: dict[str, str]) -> None:
 class GeminiLlmClient:
     """One instance per call: it holds the interaction chain."""
 
-    def __init__(self, client: Any, model: str) -> None:
+    def __init__(self, client: Any, model: str, usage: Usage | None = None) -> None:
         self._client = client
         self._model = model
+        self._usage = usage
         self._previous_id: str | None = None
         self._sent = 0
 
@@ -83,8 +85,15 @@ class GeminiLlmClient:
                 call_id = call_name = None
             elif kind == "interaction.completed":
                 self._previous_id = event.interaction.id
+                self._count_tokens(getattr(event.interaction, "usage", None))
             else:
                 log.debug("gemini_event_skipped", event_type=kind)
+
+    def _count_tokens(self, usage: Any) -> None:
+        if self._usage is None or usage is None:
+            return
+        self._usage.llm_input_tokens += int(getattr(usage, "total_input_tokens", 0) or 0)
+        self._usage.llm_output_tokens += int(getattr(usage, "total_output_tokens", 0) or 0)
 
     @staticmethod
     def _input(new: list[Message]) -> Any:

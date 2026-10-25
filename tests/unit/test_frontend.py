@@ -22,6 +22,7 @@ from jevagent.observability.metrics import (
     TimedJev,
     TurnTimer,
 )
+from jevagent.observability.summary import MemorySummaries
 from jevagent.phase_a.ack import AckPolicy, Speculator
 from jevagent.phase_a.clip_player import ClipError, ClipPlayer
 from jevagent.phase_a.clip_render import render_clips, variant_warnings
@@ -300,7 +301,10 @@ class Harness:
         llm_rounds: list[list[LlmEvent]] | None = None,
         hang: bool = False,
         auto_played: bool = True,
+        settings: Settings = SETTINGS,
     ) -> None:
+        self.settings = settings
+        self.summaries = MemorySummaries()
         self.tmp_path = tmp_path
         self.transcripts = transcripts
         self.jev = CountingJev()
@@ -336,7 +340,7 @@ class Harness:
             return CallSession(
                 call_id="c1",
                 script=SCRIPT,
-                settings=SETTINGS,
+                settings=self.settings,
                 controller=self.controller,
                 transcriber=self.stt,
                 synth=self.synth,
@@ -348,6 +352,8 @@ class Harness:
                 metrics=self.metrics,
                 ack=AckPolicy(SCRIPT, enabled=False),
                 timer_slot=slot,
+                summaries=self.summaries,
+                tools=TOOLS,
             )
 
         self.mock = MockVobiz(build, auto_played=self.auto_played)
@@ -498,3 +504,124 @@ async def test_mulaw_inbound_is_decoded(tmp_path: Path) -> None:
     await send_mulaw(silence(900, 8000))
     await h.mock.wait_idle()
     assert h.stt.calls and h.stt.calls[-1][1] == 8000
+
+
+# -- Phase 7: baseline mode, summaries, comparison ---------------------------------
+
+BASELINE = SETTINGS.model_copy(update={"baseline_mode": True})
+
+
+async def test_baseline_mode_bypasses_phase_a(tmp_path: Path) -> None:
+    rounds: list[list[LlmEvent]] = [
+        [TextDelta(text="Aap kab tak payment karenge?")],
+        [ToolCall(id="c", name="play_clip", arguments={"clip_id": "closing.ask.1"})],
+        [],
+    ]
+    h = await Harness(tmp_path, ["haan ji", "kal tak"], rounds, settings=BASELINE).setup()
+    assert h.mock.audio_since()  # same greeting clip as the hybrid agent
+    await h.mock.say()
+    assert h.synth.texts == ["Aap kab tak payment karenge?"]
+    await h.mock.say()
+    assert h.jev.calls == 0  # Jev never consulted in baseline
+    assert h.controller.state.step == "identity_confirmed"  # script engine never advanced
+    await h.mock.session.on_stop()
+    [row] = h.summaries.rows
+    assert row.mode == "baseline" and row.outcome == "completed"
+    assert row.turns == 2 and row.stt_requests == 2 and row.jev_requests == 0
+    assert row.tts_chars == len("Aap kab tak payment karenge?")
+
+
+async def test_hybrid_summary_counts_usage_and_outcomes(tmp_path: Path) -> None:
+    h = await Harness(tmp_path, ["haan ji", "kal kar dunga", "upi se"]).setup()
+    for _ in range(3):
+        await h.mock.say()
+    await asyncio.sleep(0.05)
+    await h.mock.session.on_stop()
+    await h.mock.session.on_stop()  # idempotent
+    [row] = h.summaries.rows
+    assert (row.mode, row.outcome, row.handoff_reason) == ("hybrid", "completed", None)
+    assert row.turns == 3 and row.stt_requests == 3
+
+
+async def test_summary_records_handoff_and_transfer(tmp_path: Path) -> None:
+    rounds: list[list[LlmEvent]] = [
+        [ToolCall(id="t", name="transfer_to_human", arguments={"reason": "wants human"})]
+    ]
+    h = await Harness(tmp_path, ["penalty kyun"], rounds).setup()
+    await h.mock.say()
+    await asyncio.sleep(0.05)
+    await h.mock.session.on_stop()
+    [row] = h.summaries.rows
+    assert row.outcome == "transferred" and row.handoff_reason == "turn_type=objection"
+
+
+async def test_dropped_call_outcome(tmp_path: Path) -> None:
+    h = await Harness(tmp_path, []).setup()
+    await h.mock.session.on_event({"event": "stop"})
+    assert h.summaries.rows[0].outcome == "dropped"
+
+
+def test_percentile_and_comparison_report() -> None:
+    from jevagent.observability.report import Rates, compare, percentile, to_markdown
+    from jevagent.observability.summary import CallSummary
+
+    assert percentile([], 50) is None
+    assert percentile([10, 20, 30, 40], 50) == 20
+    assert percentile([10, 20, 30, 40], 95) == 40
+    rows = [
+        CallSummary(
+            call_id="a",
+            mode="hybrid",
+            outcome="completed",
+            handoff_reason=None,
+            stt_requests=3,
+            tts_chars=0,
+            jev_requests=3,
+        ),
+        CallSummary(
+            call_id="b",
+            mode="hybrid",
+            outcome="transferred",
+            handoff_reason="x",
+            stt_requests=2,
+            tts_chars=2000,
+            jev_requests=1,
+            llm_input_tokens=4000,
+            llm_output_tokens=1000,
+        ),
+        CallSummary(
+            call_id="c",
+            mode="baseline",
+            outcome="completed",
+            stt_requests=4,
+            tts_chars=4000,
+            llm_input_tokens=8000,
+            llm_output_tokens=2000,
+        ),
+    ]
+    metrics = [
+        {"call_id": "a", "turn": 0, "ttfa_ms": 5.0},  # greeting ignored
+        {"call_id": "a", "turn": 1, "ttfa_ms": 300.0},
+        {"call_id": "b", "turn": 1, "ttfa_ms": 900.0},
+        {"call_id": "c", "turn": 1, "ttfa_ms": 1500.0},
+        {"call_id": "zzz", "turn": 1, "ttfa_ms": 1.0},  # unknown call ignored
+        {"call_id": "c", "turn": 2, "ttfa_ms": None},
+    ]
+    rates = Rates(
+        stt_per_request=0.01,
+        tts_per_1k_chars=0.1,
+        jev_per_request=0.001,
+        llm_per_1k_input_tokens=0.01,
+        llm_per_1k_output_tokens=0.02,
+    )
+    report = compare(rows, metrics, rates)
+    hy, ba = report["hybrid"], report["baseline"]
+    assert hy.calls == 2 and hy.completion_rate == 0.5 and hy.transfer_rate == 0.5
+    assert hy.handoff_rate == 0.5 and hy.ttfa_p50_ms == 300.0 and hy.ttfa_p95_ms == 900.0
+    assert ba.ttfa_p50_ms == 1500.0 and ba.handoff_rate == 0.0
+    assert hy.cost_per_call["stt"] == pytest.approx(0.025)
+    assert hy.cost_per_call["llm"] == pytest.approx((0.04 + 0.02) / 2)
+    assert ba.cost_per_call["tts"] == pytest.approx(0.4)
+    md = to_markdown(report)
+    assert "| baseline | 1 | 100.0%" in md and "| hybrid | 2 | 50.0%" in md
+    assert len(to_markdown({}).splitlines()) == 2

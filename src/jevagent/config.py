@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     barge_in_frames: int = 1  # speech frames before playback is cut (FE-2)
     min_speech_frames: int = 8  # shorter bursts are noise, not a turn
     turn_silence_ms: dict[str, int] = {"default": 700, "hinglish": 700, "en": 600}
+    baseline_mode: bool = False  # plain STT->LLM->TTS agent, Phase A bypassed (Stage 2)
+    summaries_path: str = "logs/calls.jsonl"
     ack_enabled: bool = True
     speculative_jev: bool = False  # needs streaming partial transcripts (A-10)
     metrics_path: str = "logs/metrics.jsonl"

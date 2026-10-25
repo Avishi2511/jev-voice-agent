@@ -19,6 +19,7 @@ from jevagent.frontend.vobiz_bridge import CallSession, Close, Send, TimerSlot
 from jevagent.jev.client import HttpJevClient
 from jevagent.observability.decision_log import JsonlDecisionLog
 from jevagent.observability.metrics import JsonlMetrics, TimedJev
+from jevagent.observability.summary import JsonlSummaries, Usage
 from jevagent.phase_a.ack import AckPolicy
 from jevagent.phase_a.clip_player import ClipPlayer
 from jevagent.phase_b.agent import PhaseBAgent
@@ -83,10 +84,13 @@ def build_real_builder(settings: Settings) -> SessionBuilder:
     disclosure = {c.id for c in script.shared.get("disclosure", [])}
     closing = {c.id for s in script.steps if s.slot is None for c in s.clips.ask}
     metrics = JsonlMetrics(settings.metrics_path)
+    summaries = JsonlSummaries(settings.summaries_path)
+    http_jev = HttpJevClient(settings)  # one pooled HTTP client shared by all calls
 
     def build(call_id: str, send: Send, close: Close) -> CallSession:
         slot = TimerSlot()
-        jev = TimedJev(HttpJevClient(settings), lambda: slot.current)
+        usage = Usage()
+        jev = TimedJev(http_jev, lambda: slot.current, usage)
         controller = Controller(
             script,
             jev,
@@ -105,7 +109,7 @@ def build_real_builder(settings: Settings) -> SessionBuilder:
                 today=date.today,
             )
             return PhaseBAgent(
-                GeminiLlmClient(client, settings.gemini_llm_model),
+                GeminiLlmClient(client, settings.gemini_llm_model, usage),
                 registry,
                 packet,
                 script,
@@ -127,6 +131,9 @@ def build_real_builder(settings: Settings) -> SessionBuilder:
             metrics=metrics,
             ack=AckPolicy(script, settings.ack_enabled),
             timer_slot=slot,
+            summaries=summaries,
+            usage=usage,
+            tools=TOOLS,
         )
 
     return build

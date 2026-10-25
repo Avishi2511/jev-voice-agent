@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from jevagent.jev.client import JevClient
 from jevagent.models import JevAnswer, JevQuestion, JsonDict
+from jevagent.observability.summary import Usage
 
 Clock = Callable[[], float]
 
@@ -68,12 +69,20 @@ class JsonlMetrics:
 class TimedJev:
     """Wraps a JevClient and stamps jev_sent / jev_received on the current turn's timer."""
 
-    def __init__(self, inner: JevClient, current: Callable[[], TurnTimer | None]) -> None:
+    def __init__(
+        self,
+        inner: JevClient,
+        current: Callable[[], TurnTimer | None],
+        usage: Usage | None = None,
+    ) -> None:
         self._inner = inner
         self._current = current
+        self._usage = usage
 
     async def ask(self, state: JsonDict, questions: list[JevQuestion]) -> dict[str, JevAnswer]:
         timer = self._current()
+        if self._usage:
+            self._usage.jev_requests += 1
         if timer:
             timer.mark("jev_sent")
         try:

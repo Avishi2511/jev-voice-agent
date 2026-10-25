@@ -23,14 +23,15 @@ from jevagent.controller.controller import (
     PlayClip,
     StartHandoff,
 )
-from jevagent.controller.packet import HandoffPacket
+from jevagent.controller.packet import HandoffPacket, build_packet
 from jevagent.frontend.audio import frame_bytes, to_pcm16
 from jevagent.frontend.stt import Transcriber, TranscriptionError
 from jevagent.frontend.tts import OUT_RATE, Synthesizer
 from jevagent.frontend.turn_detect import SpeechStarted, TurnDetector, TurnEnded, silence_ms_for
 from jevagent.frontend.vad import Vad
-from jevagent.models import JsonDict
+from jevagent.models import Handoff, HandoffReason, JsonDict, Mode
 from jevagent.observability.metrics import MetricsSink, TurnTimer
+from jevagent.observability.summary import CallSummary, Outcome, SummarySink, Usage
 from jevagent.phase_a.ack import AckPolicy, Speculator
 from jevagent.phase_a.clip_player import ClipPlayer
 from jevagent.phase_b.agent import AgentOutput, PhaseBAgent, Say, Transferred
@@ -68,6 +69,9 @@ class CallSession:
         ack: AckPolicy | None = None,
         speculator: Speculator | None = None,
         timer_slot: "TimerSlot | None" = None,
+        summaries: SummarySink | None = None,
+        usage: Usage | None = None,
+        tools: list[str] | None = None,
     ) -> None:
         self.call_id = call_id
         self._script, self._settings = script, settings
@@ -97,6 +101,15 @@ class CallSession:
         self._closed = False
         self._last_stt_failed = False
         self._inflight = 0
+        self._summaries = summaries
+        self._usage = usage or Usage()
+        self._tools = tools or []
+        self._baseline = settings.baseline_mode
+        self._closing = {c.id for st in script.steps if st.slot is None for c in st.clips.ask}
+        self._outcome: Outcome = "dropped"
+        self._handoff_reason: str | None = None
+        self._stt_requests = self._tts_chars = self._caller_turns = 0
+        self._summary_written = False
 
     @property
     def idle(self) -> bool:
@@ -140,6 +153,8 @@ class CallSession:
         await self._play_clip(self._controller.start().clip_id, greeting)
         await self._finish_turn()
         self._metrics.write(greeting.timings)
+        if self._baseline:
+            self._start_baseline_agent()
 
     async def _on_media(self, payload_b64: str) -> None:
         if self._detector is None:
@@ -158,7 +173,15 @@ class CallSession:
                     self._inflight += 1
                     self._queue.put_nowait((ev.pcm, timer))
 
+    def _start_baseline_agent(self) -> None:
+        """Stage 2: Phase A is bypassed; the LLM agent handles every turn after the greeting."""
+        state = self._controller.state
+        state.mode = Mode.B  # also disables acknowledgement clips
+        handoff = Handoff(reason=HandoffReason.OFF_SCRIPT, detail="baseline_mode")
+        self._agent = self._agent_factory(build_packet(state, handoff, self._tools))
+
     async def on_stop(self) -> None:
+        self._write_summary()
         self._closed = True
         if self._speculator:
             self._speculator.cancel()
@@ -216,6 +239,10 @@ class CallSession:
         if not text and not self._last_stt_failed:
             log.info("empty_transcript_ignored", call_id=self.call_id)
             return
+        self._caller_turns += 1
+        if self._baseline and self._agent is not None:
+            await self._speak(self._agent.on_caller_turn(text), timer)
+            return
         action = await self._controller.on_caller_turn(
             text, self._speculator.take(text) if self._speculator else None
         )
@@ -223,8 +250,10 @@ class CallSession:
             await self._play_clip(action.clip_id, timer)
             await self._finish_turn()
             if action.end_call:
+                self._outcome = "completed"
                 await self._end_call()
         elif isinstance(action, StartHandoff):
+            self._handoff_reason = action.packet.handoff_reason
             self._agent = self._agent_factory(action.packet)
             await self._play_clip(self._agent.begin().clip_id, timer)
             await self._speak(self._agent.first_turn(), timer)
@@ -233,6 +262,7 @@ class CallSession:
 
     async def _transcribe(self, pcm: bytes) -> str:
         self._last_stt_failed = False
+        self._stt_requests += 1
         try:
             return await self._stt.transcribe(pcm, self._rate)
         except TranscriptionError:
@@ -254,9 +284,12 @@ class CallSession:
                 if buffer.strip():
                     await self._say(buffer, timer)
                     buffer = ""
+                if out.clip_id in self._closing:
+                    self._outcome = "completed"
                 await self._play_clip(out.clip_id, timer)
             elif isinstance(out, Transferred):
                 transferred = True
+                self._outcome = "transferred"
                 log.info("transfer_to_human", call_id=self.call_id, reason=out.reason)
         if buffer.strip():
             await self._say(buffer, timer)
@@ -265,6 +298,7 @@ class CallSession:
             await self._end_call()
 
     async def _say(self, text: str, timer: TurnTimer) -> None:
+        self._tts_chars += len(text.strip())
         async for chunk in self._synth.stream(text.strip()):
             await self._send_pcm(chunk, timer)
 
@@ -309,6 +343,25 @@ class CallSession:
                 await asyncio.wait_for(self._played.wait(), CHECKPOINT_TIMEOUT_S)
         self._closed = True
         await self._close()
+
+    def _write_summary(self) -> None:
+        if self._summaries is None or self._summary_written:
+            return
+        self._summary_written = True
+        self._summaries.write(
+            CallSummary(
+                call_id=self.call_id,
+                mode="baseline" if self._baseline else "hybrid",
+                outcome=self._outcome,
+                handoff_reason=self._handoff_reason,
+                turns=self._caller_turns,
+                stt_requests=self._stt_requests,
+                tts_chars=self._tts_chars,
+                jev_requests=self._usage.jev_requests,
+                llm_input_tokens=self._usage.llm_input_tokens,
+                llm_output_tokens=self._usage.llm_output_tokens,
+            )
+        )
 
 
 class TimerSlot:
