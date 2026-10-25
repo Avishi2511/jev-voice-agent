@@ -290,3 +290,37 @@ def test_decision_is_recorded(tmp_path: Path) -> None:
     text = path.read_text(encoding="utf-8")
     assert text.count("NO-GO (recorded by product owner)") == 2
     assert "- failed: completion" in text and "- note: rerun after fixes" in text
+
+
+def test_console_live_log_echoes_and_persists(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from datetime import UTC, datetime
+
+    from jevagent.frontend.console import LiveLog
+    from jevagent.models import JevAnswer
+    from jevagent.observability.decision_log import DecisionRecord
+
+    record = DecisionRecord(
+        call_id="c",
+        turn=2,
+        timestamp=datetime(2026, 1, 1, tzinfo=UTC),
+        model_version="jev-1.14.0",
+        state_sent={},
+        questions=[],
+        answers={
+            "answered_step": JevAnswer(key="answered_step", selected="yes", confidence=0.9),
+            "turn_type": JevAnswer(key="turn_type", selected="objection", confidence=0.4),
+        },
+        action={"type": "StartHandoff", "packet": {"handoff_reason": "turn_type=objection"}},
+    )
+    LiveLog(str(tmp_path / "c.jsonl"), 0.7, echo=True).write(record)
+    out = capsys.readouterr().out
+    assert "answered_step" in out and "yes" in out
+    assert "turn_type" in out and "below threshold" in out.split("turn_type")[1]
+    assert "StartHandoff turn_type=objection" in out
+    assert (tmp_path / "c.jsonl").read_text(encoding="utf-8").count("\n") == 1
+
+    LiveLog(str(tmp_path / "q.jsonl"), 0.7, echo=False).write(record)
+    assert capsys.readouterr().out == ""
+    assert (tmp_path / "q.jsonl").exists()

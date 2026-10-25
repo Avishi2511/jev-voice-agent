@@ -8,15 +8,15 @@ steps:
     slot: identity
     clips:
       ask:
-        - {id: identity.ask.1, text: "Hello, am I speaking with {name}?"}
-        - {id: identity.ask.2, text: "Hi, is this {name}?"}
+        - {id: identity.ask.1, text: "Hello, am I speaking with the person who placed the order?"}
+        - {id: identity.ask.2, text: "Hi, is this the person expecting the delivery?"}
       re_ask:
-        - {id: identity.re_ask.1, text: "Sorry, is this {name}?"}
-        - {id: identity.re_ask.2, text: "Could you confirm you are {name}?"}
+        - {id: identity.re_ask.1, text: "Sorry, are you the person who placed the order?"}
+        - {id: identity.re_ask.2, text: "Could you confirm that you are expecting this delivery?"}
     questions:
       slot_value:
         type: choice
-        instruction: "Does the caller confirm they are the named customer?"
+        instruction: "Does the caller confirm they are the person who placed the order or is expecting the delivery?"
         options: [confirmed, denied, unclear]
   - id: at_home
     slot: at_home

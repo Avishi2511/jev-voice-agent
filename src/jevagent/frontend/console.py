@@ -1,10 +1,13 @@
 """Text console for the whole stack, no audio: real Jev for Phase A, Gemini LLM for Phase B.
 
-    uv run python -m jevagent.frontend.console
+    uv run python -m jevagent.frontend.console [--quiet]
 
-You type as the caller. Needs JEV_API_KEY, and GEMINI_API_KEY once the call reaches Phase B.
+You type as the caller. Each turn prints what Jev answered and the action taken, as it happens
+(--quiet hides that); everything is also appended to logs/console.jsonl.
+Needs JEV_API_KEY, and GEMINI_API_KEY once the call reaches Phase B.
 """
 
+import argparse
 import asyncio
 import sys
 from datetime import date
@@ -15,7 +18,7 @@ from jevagent.config import Settings
 from jevagent.controller.controller import Controller, PassToPhaseB, PlayClip, StartHandoff
 from jevagent.frontend.llm import GeminiLlmClient
 from jevagent.jev.client import HttpJevClient
-from jevagent.observability.decision_log import JsonlDecisionLog
+from jevagent.observability.decision_log import DecisionRecord, JsonlDecisionLog
 from jevagent.phase_b.agent import PhaseBAgent, Say, Transferred
 from jevagent.phase_b.tools import MockCrm, RecordingTransfer, ToolRegistry
 from jevagent.script.loader import load_script
@@ -23,14 +26,43 @@ from jevagent.script.loader import load_script
 TOOLS = ["get_loan_account", "explain_charges", "schedule_callback", "transfer_to_human"]
 
 
+class LiveLog:
+    """Writes the JSONL decision log and echoes each decision to the terminal."""
+
+    def __init__(self, path: str, threshold: float, echo: bool) -> None:
+        self._file = JsonlDecisionLog(path)
+        self._threshold = threshold
+        self._echo = echo
+
+    def write(self, record: DecisionRecord) -> None:
+        self._file.write(record)
+        if not self._echo:
+            return
+        print(f"  [turn {record.turn}] jev {record.model_version}, answers:")
+        for key, a in record.answers.items():
+            low = "  <- below threshold" if a.confidence < self._threshold else ""
+            print(f"    {key:<34} {a.selected!s:<14} {a.confidence:.2f}{low}")
+        action = record.action
+        detail = action.get("clip_id") or action.get("packet", {}).get("handoff_reason") or ""
+        print(f"  [turn {record.turn}] action: {action['type']} {detail}")
+
+
 async def main() -> None:
+    ap = argparse.ArgumentParser(description="Text console for the hybrid agent")
+    ap.add_argument("--quiet", action="store_true", help="do not echo Jev answers per turn")
+    args = ap.parse_args()
     settings = Settings()
     if not settings.jev_api_key.get_secret_value():
         sys.exit("JEV_API_KEY is not set (put it in .env)")
     script = load_script(settings.script_path)
     jev = HttpJevClient(settings)
     controller = Controller(
-        script, jev, settings, JsonlDecisionLog("logs/console.jsonl"), "console", tools=TOOLS
+        script,
+        jev,
+        settings,
+        LiveLog("logs/console.jsonl", script.thresholds["default"], echo=not args.quiet),
+        "console",
+        tools=TOOLS,
     )
     agent: PhaseBAgent | None = None
 

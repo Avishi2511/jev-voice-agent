@@ -8,15 +8,15 @@ steps:
     slot: identity
     clips:
       ask:
-        - {id: identity.ask.1, text: "Hello, am I speaking with {name}?"}
-        - {id: identity.ask.2, text: "Hi, is this {name} on the line?"}
+        - {id: identity.ask.1, text: "Hello, am I speaking with the account holder?"}
+        - {id: identity.ask.2, text: "Hi, is this the person this account belongs to?"}
       re_ask:
-        - {id: identity.re_ask.1, text: "Sorry, could you confirm if this is {name}?"}
-        - {id: identity.re_ask.2, text: "Am I speaking with {name}?"}
+        - {id: identity.re_ask.1, text: "Sorry, could you confirm that you are the account holder?"}
+        - {id: identity.re_ask.2, text: "Am I speaking with the right person?"}
     questions:
       slot_value:
         type: choice
-        instruction: "Does the caller confirm they are the named customer?"
+        instruction: "Does the caller confirm they are the right person (the account holder)?"
         options: [confirmed, denied, unclear]
   - id: pay_when
     slot: pay_date_bucket

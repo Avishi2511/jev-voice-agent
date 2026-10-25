@@ -8,15 +8,15 @@ steps:
     slot: identity
     clips:
       ask:
-        - {id: identity.ask.1, text: "Namaste, kya meri baat {name} ji se ho rahi hai?"}
-        - {id: identity.ask.2, text: "Hello, main {name} ji se baat kar rahi hoon, sahi?"}
+        - {id: identity.ask.1, text: "Namaste, kya meri baat is account ke malik se ho rahi hai?"}
+        - {id: identity.ask.2, text: "Hello, kya main sahi vyakti se baat kar rahi hoon?"}
       re_ask:
-        - {id: identity.re_ask.1, text: "Maaf kijiye, kya aap {name} ji bol rahe hain?"}
-        - {id: identity.re_ask.2, text: "Kya main {name} ji se hi baat kar rahi hoon?"}
+        - {id: identity.re_ask.1, text: "Maaf kijiye, kya aap is account ke malik bol rahe hain?"}
+        - {id: identity.re_ask.2, text: "Kya main sahi vyakti se hi baat kar rahi hoon?"}
     questions:
       slot_value:
         type: choice
-        instruction: "Does the caller confirm they are the named customer?"
+        instruction: "Does the caller confirm they are the right person (the account holder)?"
         options: [confirmed, denied, unclear]
   - id: pay_when
     slot: pay_date_bucket

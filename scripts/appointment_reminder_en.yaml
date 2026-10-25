@@ -8,15 +8,15 @@ steps:
     slot: identity
     clips:
       ask:
-        - {id: identity.ask.1, text: "Hello, may I speak with {name}?"}
-        - {id: identity.ask.2, text: "Hi, is this {name}?"}
+        - {id: identity.ask.1, text: "Hello, am I speaking with the person who booked the appointment?"}
+        - {id: identity.ask.2, text: "Hi, is this the right person for the appointment?"}
       re_ask:
-        - {id: identity.re_ask.1, text: "Sorry, am I speaking with {name}?"}
-        - {id: identity.re_ask.2, text: "Could you confirm that you are {name}?"}
+        - {id: identity.re_ask.1, text: "Sorry, could you confirm that you booked the appointment?"}
+        - {id: identity.re_ask.2, text: "Could you confirm that I have the right person?"}
     questions:
       slot_value:
         type: choice
-        instruction: "Does the caller confirm they are the named patient?"
+        instruction: "Does the caller confirm they are the person who booked the appointment?"
         options: [confirmed, denied, unclear]
   - id: attendance
     slot: attendance
