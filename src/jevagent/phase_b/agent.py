@@ -133,6 +133,11 @@ class PhaseBAgent:
             self.finished = True
             yield Transferred(reason=str(call.arguments["reason"]))
 
+    async def abort(self, reason: str) -> None:
+        """Hand the call to a human now (used by the front end when speech output fails)."""
+        await self._tools.transfer(reason)
+        self.finished = True
+
     async def _fail(self, reason: str) -> AsyncIterator[AgentOutput]:
         yield PlayClip(clip_id=self._fallback)
         await self._tools.transfer(reason)

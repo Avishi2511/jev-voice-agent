@@ -9,6 +9,7 @@ import structlog
 from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
 from google import genai
 
+from jevagent.ab import AbRouter, settings_for_arm
 from jevagent.config import Settings
 from jevagent.controller.controller import Controller
 from jevagent.eval.shadow import JsonlShadow, ShadowRecorder
@@ -89,14 +90,21 @@ def build_real_builder(settings: Settings) -> SessionBuilder:
     transcripts = JsonlTranscripts(settings.transcripts_path) if settings.save_transcripts else None
     http_jev = HttpJevClient(settings)  # one pooled HTTP client shared by all calls
 
+    router = (
+        AbRouter(settings.ab_hybrid_percent, settings.kill_switch_path)
+        if settings.ab_hybrid_percent is not None
+        else None
+    )
+
     def build(call_id: str, send: Send, close: Close) -> CallSession:
+        cfg = settings_for_arm(settings, router.assign(call_id)) if router else settings
         slot = TimerSlot()
         usage = Usage()
         jev = TimedJev(http_jev, lambda: slot.current, usage)
         controller = Controller(
             script,
             jev,
-            settings,
+            cfg,
             JsonlDecisionLog(settings.decision_log_path),
             call_id,
             tools=TOOLS,
@@ -115,11 +123,11 @@ def build_real_builder(settings: Settings) -> SessionBuilder:
                 registry,
                 packet,
                 script,
-                settings,
+                cfg,
             )
 
         shadow = None
-        if settings.shadow_mode:
+        if cfg.shadow_mode:
             shadow_controller = Controller(
                 script,
                 http_jev,
@@ -133,7 +141,7 @@ def build_real_builder(settings: Settings) -> SessionBuilder:
         return CallSession(
             call_id=call_id,
             script=script,
-            settings=settings,
+            settings=cfg,
             controller=controller,
             transcriber=transcriber,
             synth=synth,
@@ -143,7 +151,7 @@ def build_real_builder(settings: Settings) -> SessionBuilder:
             send=send,
             close=close,
             metrics=metrics,
-            ack=AckPolicy(script, settings.ack_enabled),
+            ack=AckPolicy(script, cfg.ack_enabled),
             timer_slot=slot,
             summaries=summaries,
             usage=usage,

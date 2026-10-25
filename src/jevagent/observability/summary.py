@@ -31,6 +31,7 @@ class CallSummary(BaseModel):
     jev_requests: int = 0
     llm_input_tokens: int = 0
     llm_output_tokens: int = 0
+    clips_played: list[str] = []
 
 
 class SummarySink(Protocol):

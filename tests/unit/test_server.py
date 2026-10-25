@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -13,6 +14,7 @@ from jevagent.frontend.vobiz_bridge import CallSession, Close, Send
 from jevagent.jev.fake import RuleBasedJev
 from jevagent.observability.decision_log import MemoryDecisionLog
 from jevagent.observability.metrics import MemoryMetrics
+from jevagent.observability.summary import MemorySummaries
 from jevagent.phase_a.clip_player import ClipPlayer
 from jevagent.phase_a.clip_render import render_clips
 from jevagent.script.loader import load_script
@@ -34,6 +36,7 @@ def test_answer_xml_matches_documented_shape() -> None:
 async def test_app_endpoints_and_websocket_call(tmp_path: Path) -> None:
     await render_clips(SCRIPT, FakeSynthesizer(), tmp_path)
     clips = ClipPlayer.load(tmp_path)
+    summaries = MemorySummaries()
 
     def builder(call_id: str, send: Send, close: Close) -> CallSession:
         return CallSession(
@@ -51,6 +54,7 @@ async def test_app_endpoints_and_websocket_call(tmp_path: Path) -> None:
             send=send,
             close=close,
             metrics=MemoryMetrics(),
+            summaries=summaries,
         )
 
     client = TestClient(create_app(builder, "https://host.example"))
@@ -78,3 +82,9 @@ async def test_app_endpoints_and_websocket_call(tmp_path: Path) -> None:
             events.append(ws.receive_json()["event"])
         assert set(events) == {"playAudio", "checkpoint"}
         ws.send_json({"event": "playedStream"})
+    # the client hung up mid-call: the server must still close the call out
+    for _ in range(100):
+        if summaries.rows:
+            break
+        await asyncio.sleep(0.02)
+    assert [r.outcome for r in summaries.rows] == ["dropped"]

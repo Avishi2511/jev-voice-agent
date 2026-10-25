@@ -27,7 +27,7 @@ from jevagent.controller.packet import HandoffPacket, build_packet
 from jevagent.eval.shadow import ShadowRecorder
 from jevagent.frontend.audio import frame_bytes, to_pcm16
 from jevagent.frontend.stt import Transcriber, TranscriptionError
-from jevagent.frontend.tts import OUT_RATE, Synthesizer
+from jevagent.frontend.tts import OUT_RATE, SynthesisError, Synthesizer
 from jevagent.frontend.turn_detect import SpeechStarted, TurnDetector, TurnEnded, silence_ms_for
 from jevagent.frontend.vad import Vad
 from jevagent.models import Handoff, HandoffReason, JsonDict, Mode
@@ -51,6 +51,7 @@ PLAY_CONTENT_TYPE = "audio/x-l16"
 CHECKPOINT_TIMEOUT_S = 10.0
 _SENTENCE_END = re.compile(r"(?<=[.?!।])\s+")
 MAX_SENTENCE_CHARS = 160
+INAUDIBLE = "[inaudible]"
 
 Send = Callable[[JsonDict], Awaitable[None]]
 Close = Callable[[], Awaitable[None]]
@@ -122,6 +123,7 @@ class CallSession:
         self._shadow = shadow
         self._transcripts = transcripts
         self._lines: list[str] = []
+        self._clips_played: list[str] = []
 
     @property
     def idle(self) -> bool:
@@ -253,6 +255,8 @@ class CallSession:
         if not text and not self._last_stt_failed:
             log.info("empty_transcript_ignored", call_id=self.call_id)
             return
+        if self._last_stt_failed and self._controller.state.mode is Mode.B:
+            text = INAUDIBLE  # Phase B asks the caller to repeat; Phase A treats "" as unclear
         self._caller_turns += 1
         self._lines.append(f"caller: {text}")
         if self._shadow:
@@ -260,9 +264,13 @@ class CallSession:
         if self._baseline and self._agent is not None:
             await self._speak(self._agent.on_caller_turn(text), timer)
             return
-        action = await self._controller.on_caller_turn(
-            text, self._speculator.take(text) if self._speculator else None
-        )
+        try:
+            action = await self._controller.on_caller_turn(
+                text, self._speculator.take(text) if self._speculator else None
+            )
+        except Exception:  # Jev outage or bug: hand off early rather than go silent
+            log.exception("phase_a_failed", call_id=self.call_id)
+            action = self._controller.force_handoff("jev_unavailable")
         if isinstance(action, PlayClip):
             await self._play_clip(action.clip_id, timer)
             await self._finish_turn()
@@ -289,6 +297,23 @@ class CallSession:
     # -- Phase B output -----------------------------------------------------------
 
     async def _speak(self, outputs: AsyncIterator[AgentOutput], timer: TurnTimer) -> None:
+        try:
+            await self._speak_outputs(outputs, timer)
+        except SynthesisError:
+            log.error("tts_failed_mid_reply", call_id=self.call_id)
+            await self._abort_to_human("tts_failure", timer)
+
+    async def _abort_to_human(self, reason: str, timer: TurnTimer) -> None:
+        fallback = self._script.shared.get("fallback")
+        if fallback:
+            await self._play_clip(fallback[0].id, timer)
+        if self._agent is not None:
+            await self._agent.abort(reason)
+        self._outcome = "transferred"
+        await self._finish_turn()
+        await self._end_call()
+
+    async def _speak_outputs(self, outputs: AsyncIterator[AgentOutput], timer: TurnTimer) -> None:
         buffer = ""
         transferred = False
         async for out in outputs:
@@ -324,6 +349,7 @@ class CallSession:
 
     async def _play_clip(self, clip_id: str, timer: TurnTimer | None = None) -> None:
         self._lines.append(f"agent: {self._script.clip_text(clip_id)}")
+        self._clips_played.append(clip_id)
         await self._send_pcm(self._clips.pcm(clip_id), timer or self._timer_slot.current)
 
     async def _send_pcm(self, pcm: bytes, timer: TurnTimer | None) -> None:
@@ -381,6 +407,7 @@ class CallSession:
                 jev_requests=self._usage.jev_requests,
                 llm_input_tokens=self._usage.llm_input_tokens,
                 llm_output_tokens=self._usage.llm_output_tokens,
+                clips_played=self._clips_played,
             )
         )
 

@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     summaries_path: str = "logs/calls.jsonl"
     # Stage 3: run Phase A silently beside the live baseline and log what it would have done.
     shadow_mode: bool = False
+    # Stage 4: share of calls routed to hybrid (None = no routing, use baseline_mode as set).
+    ab_hybrid_percent: int | None = None
+    kill_switch_path: str = "KILL_HYBRID"
     shadow_path: str = "logs/shadow.jsonl"
     shadow_decisions_path: str = "logs/shadow_decisions.jsonl"
     # Transcripts contain PII: off unless you have consent and a retention policy (PRD Q7).

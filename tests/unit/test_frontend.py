@@ -283,10 +283,12 @@ class ScriptedLlm:
         self.rounds = list(rounds)
         self.hang = hang_after_first
         self.started = asyncio.Event()
+        self.calls: list[list[Message]] = []
 
     async def stream(
         self, messages: list[Message], tools: list[ToolDef]
     ) -> AsyncIterator[LlmEvent]:
+        self.calls.append([m.model_copy() for m in messages])
         for event in self.rounds.pop(0):
             yield event
         if self.hang:

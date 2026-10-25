@@ -20,6 +20,7 @@ from jevagent.models import (
     Advance,
     CallState,
     Handoff,
+    HandoffReason,
     JevAnswer,
     JevQuestion,
     JsonDict,
@@ -81,6 +82,13 @@ class Controller:
         clip = self._engine.opening_clip(self.state)
         self._remember_agent(clip)
         return PlayClip(clip_id=clip)
+
+    def force_handoff(self, detail: str) -> StartHandoff:
+        """Leave Phase A without a Jev verdict (e.g. Jev is down): better than a stuck call."""
+        handoff = Handoff(reason=HandoffReason.UNCOVERED_STATE, detail=detail)
+        self.state.mode = Mode.B
+        log.warning("forced_handoff", call_id=self._call_id, detail=detail)
+        return StartHandoff(packet=build_packet(self.state, handoff, self._tools))
 
     def prefetch(self, utterance: str) -> "asyncio.Task[dict[str, JevAnswer]] | None":
         """Start this turn's Jev request early (A-10). Pass the task to on_caller_turn to use it."""

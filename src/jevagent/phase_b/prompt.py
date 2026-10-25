@@ -26,6 +26,7 @@ before anything else. The caller must never have to repeat themselves.
 dates or fees. Available tools: {tools}.
 - Mandatory disclosures and the closing line are pre-recorded; play them with the \
 play_clip tool, never speak them yourself.
+- A caller message of [inaudible] means speech recognition failed: politely ask them to repeat.
 - If the caller asks for a human, is distressed, or you cannot help, call transfer_to_human.
 """
 
