@@ -69,3 +69,27 @@ def load_metric_rows(path: str | Path) -> list[dict[str, object]]:
         for line in Path(path).read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
+
+
+class TranscriptSink(Protocol):
+    def write(self, call_id: str, lines: list[str]) -> None: ...
+
+
+class MemoryTranscripts:
+    def __init__(self) -> None:
+        self.rows: dict[str, list[str]] = {}
+
+    def write(self, call_id: str, lines: list[str]) -> None:
+        self.rows[call_id] = list(lines)
+
+
+class JsonlTranscripts:
+    """Transcripts can contain PII: keep this file out of git and apply your retention policy."""
+
+    def __init__(self, path: str | Path) -> None:
+        self._path = Path(path)
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+
+    def write(self, call_id: str, lines: list[str]) -> None:
+        with self._path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps({"call_id": call_id, "lines": lines}) + "\n")

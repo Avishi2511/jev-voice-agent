@@ -7,6 +7,7 @@ from pydantic import SecretStr
 
 from jevagent.config import Settings
 from jevagent.controller.controller import Controller
+from jevagent.eval.shadow import MemoryShadow, ShadowRecorder
 from jevagent.frontend.audio import frame_bytes, normalise_rms, rms, silence, tone
 from jevagent.frontend.mock_caller import MockVobiz
 from jevagent.frontend.stt import FakeTranscriber, TranscriptionError
@@ -22,7 +23,7 @@ from jevagent.observability.metrics import (
     TimedJev,
     TurnTimer,
 )
-from jevagent.observability.summary import MemorySummaries
+from jevagent.observability.summary import MemorySummaries, MemoryTranscripts
 from jevagent.phase_a.ack import AckPolicy, Speculator
 from jevagent.phase_a.clip_player import ClipError, ClipPlayer
 from jevagent.phase_a.clip_render import render_clips, variant_warnings
@@ -302,8 +303,12 @@ class Harness:
         hang: bool = False,
         auto_played: bool = True,
         settings: Settings = SETTINGS,
+        with_shadow: bool = False,
     ) -> None:
         self.settings = settings
+        self.with_shadow = with_shadow
+        self.shadow_sink = MemoryShadow()
+        self.transcript_sink = MemoryTranscripts()
         self.summaries = MemorySummaries()
         self.tmp_path = tmp_path
         self.transcripts = transcripts
@@ -323,6 +328,12 @@ class Harness:
 
         def build(send: Send, close: Close) -> CallSession:
             slot = TimerSlot()
+            shadow = None
+            if self.with_shadow:
+                shadow_ctl = Controller(
+                    SCRIPT, rule_jev(), SETTINGS, MemoryDecisionLog(), "c1", seed=1
+                )
+                shadow = ShadowRecorder(shadow_ctl, self.shadow_sink, "c1")
             self.controller = Controller(
                 SCRIPT,
                 TimedJev(self.jev, lambda: slot.current),  # type: ignore[arg-type]
@@ -354,6 +365,8 @@ class Harness:
                 timer_slot=slot,
                 summaries=self.summaries,
                 tools=TOOLS,
+                shadow=shadow,
+                transcripts=self.transcript_sink,
             )
 
         self.mock = MockVobiz(build, auto_played=self.auto_played)
@@ -625,3 +638,25 @@ def test_percentile_and_comparison_report() -> None:
     md = to_markdown(report)
     assert "| baseline | 1 | 100.0%" in md and "| hybrid | 2 | 50.0%" in md
     assert len(to_markdown({}).splitlines()) == 2
+
+
+async def test_shadow_beside_baseline_and_transcript_capture(tmp_path: Path) -> None:
+    rounds: list[list[LlmEvent]] = [
+        [TextDelta(text="Aap kab tak payment karenge?")],
+        [TextDelta(text="Theek hai.")],
+    ]
+    h = await Harness(
+        tmp_path, ["haan ji", "kal tak"], rounds, settings=BASELINE, with_shadow=True
+    ).setup()
+    await h.mock.say()
+    await h.mock.say()
+    await h.mock.session.on_stop()
+    # live call is the baseline LLM; Jev only ran in the shadow controller
+    assert h.synth.texts == ["Aap kab tak payment karenge?", "Theek hai."]
+    assert h.jev.calls == 0
+    assert [t.would_do for t in h.shadow_sink.rows] == ["clip", "clip"]
+    assert h.shadow_sink.rows[1].slots["pay_date_bucket"] == "tomorrow"
+    assert h.shadow_sink.rows[0].stt_ms is not None
+    lines = h.transcript_sink.rows["c1"]
+    assert lines[0].startswith("agent: ") and "caller: haan ji" in lines
+    assert "agent: Aap kab tak payment karenge?" in lines

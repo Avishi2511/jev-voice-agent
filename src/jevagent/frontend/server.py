@@ -11,6 +11,7 @@ from google import genai
 
 from jevagent.config import Settings
 from jevagent.controller.controller import Controller
+from jevagent.eval.shadow import JsonlShadow, ShadowRecorder
 from jevagent.frontend.llm import GeminiLlmClient, check_models
 from jevagent.frontend.stt import GeminiTranscriber
 from jevagent.frontend.tts import GeminiSynthesizer
@@ -19,7 +20,7 @@ from jevagent.frontend.vobiz_bridge import CallSession, Close, Send, TimerSlot
 from jevagent.jev.client import HttpJevClient
 from jevagent.observability.decision_log import JsonlDecisionLog
 from jevagent.observability.metrics import JsonlMetrics, TimedJev
-from jevagent.observability.summary import JsonlSummaries, Usage
+from jevagent.observability.summary import JsonlSummaries, JsonlTranscripts, Usage
 from jevagent.phase_a.ack import AckPolicy
 from jevagent.phase_a.clip_player import ClipPlayer
 from jevagent.phase_b.agent import PhaseBAgent
@@ -85,6 +86,7 @@ def build_real_builder(settings: Settings) -> SessionBuilder:
     closing = {c.id for s in script.steps if s.slot is None for c in s.clips.ask}
     metrics = JsonlMetrics(settings.metrics_path)
     summaries = JsonlSummaries(settings.summaries_path)
+    transcripts = JsonlTranscripts(settings.transcripts_path) if settings.save_transcripts else None
     http_jev = HttpJevClient(settings)  # one pooled HTTP client shared by all calls
 
     def build(call_id: str, send: Send, close: Close) -> CallSession:
@@ -116,6 +118,18 @@ def build_real_builder(settings: Settings) -> SessionBuilder:
                 settings,
             )
 
+        shadow = None
+        if settings.shadow_mode:
+            shadow_controller = Controller(
+                script,
+                http_jev,
+                settings,
+                JsonlDecisionLog(settings.shadow_decisions_path),
+                call_id,
+                tools=TOOLS,
+            )
+            shadow = ShadowRecorder(shadow_controller, JsonlShadow(settings.shadow_path), call_id)
+
         return CallSession(
             call_id=call_id,
             script=script,
@@ -134,6 +148,8 @@ def build_real_builder(settings: Settings) -> SessionBuilder:
             summaries=summaries,
             usage=usage,
             tools=TOOLS,
+            shadow=shadow,
+            transcripts=transcripts,
         )
 
     return build

@@ -24,6 +24,7 @@ from jevagent.controller.controller import (
     StartHandoff,
 )
 from jevagent.controller.packet import HandoffPacket, build_packet
+from jevagent.eval.shadow import ShadowRecorder
 from jevagent.frontend.audio import frame_bytes, to_pcm16
 from jevagent.frontend.stt import Transcriber, TranscriptionError
 from jevagent.frontend.tts import OUT_RATE, Synthesizer
@@ -31,7 +32,13 @@ from jevagent.frontend.turn_detect import SpeechStarted, TurnDetector, TurnEnded
 from jevagent.frontend.vad import Vad
 from jevagent.models import Handoff, HandoffReason, JsonDict, Mode
 from jevagent.observability.metrics import MetricsSink, TurnTimer
-from jevagent.observability.summary import CallSummary, Outcome, SummarySink, Usage
+from jevagent.observability.summary import (
+    CallSummary,
+    Outcome,
+    SummarySink,
+    TranscriptSink,
+    Usage,
+)
 from jevagent.phase_a.ack import AckPolicy, Speculator
 from jevagent.phase_a.clip_player import ClipPlayer
 from jevagent.phase_b.agent import AgentOutput, PhaseBAgent, Say, Transferred
@@ -72,6 +79,8 @@ class CallSession:
         summaries: SummarySink | None = None,
         usage: Usage | None = None,
         tools: list[str] | None = None,
+        shadow: ShadowRecorder | None = None,
+        transcripts: TranscriptSink | None = None,
     ) -> None:
         self.call_id = call_id
         self._script, self._settings = script, settings
@@ -110,6 +119,9 @@ class CallSession:
         self._handoff_reason: str | None = None
         self._stt_requests = self._tts_chars = self._caller_turns = 0
         self._summary_written = False
+        self._shadow = shadow
+        self._transcripts = transcripts
+        self._lines: list[str] = []
 
     @property
     def idle(self) -> bool:
@@ -181,6 +193,8 @@ class CallSession:
         self._agent = self._agent_factory(build_packet(state, handoff, self._tools))
 
     async def on_stop(self) -> None:
+        if self._shadow:
+            await self._shadow.close()
         self._write_summary()
         self._closed = True
         if self._speculator:
@@ -240,6 +254,9 @@ class CallSession:
             log.info("empty_transcript_ignored", call_id=self.call_id)
             return
         self._caller_turns += 1
+        self._lines.append(f"caller: {text}")
+        if self._shadow:
+            self._shadow.submit(text, timer.timings.turn, timer.timings.ms("turn_end", "stt_done"))
         if self._baseline and self._agent is not None:
             await self._speak(self._agent.on_caller_turn(text), timer)
             return
@@ -299,12 +316,14 @@ class CallSession:
 
     async def _say(self, text: str, timer: TurnTimer) -> None:
         self._tts_chars += len(text.strip())
+        self._lines.append(f"agent: {text.strip()}")
         async for chunk in self._synth.stream(text.strip()):
             await self._send_pcm(chunk, timer)
 
     # -- outbound audio -------------------------------------------------------------
 
     async def _play_clip(self, clip_id: str, timer: TurnTimer | None = None) -> None:
+        self._lines.append(f"agent: {self._script.clip_text(clip_id)}")
         await self._send_pcm(self._clips.pcm(clip_id), timer or self._timer_slot.current)
 
     async def _send_pcm(self, pcm: bytes, timer: TurnTimer | None) -> None:
@@ -348,6 +367,8 @@ class CallSession:
         if self._summaries is None or self._summary_written:
             return
         self._summary_written = True
+        if self._transcripts is not None:
+            self._transcripts.write(self.call_id, self._lines)
         self._summaries.write(
             CallSummary(
                 call_id=self.call_id,

@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     turn_silence_ms: dict[str, int] = {"default": 700, "hinglish": 700, "en": 600}
     baseline_mode: bool = False  # plain STT->LLM->TTS agent, Phase A bypassed (Stage 2)
     summaries_path: str = "logs/calls.jsonl"
+    # Stage 3: run Phase A silently beside the live baseline and log what it would have done.
+    shadow_mode: bool = False
+    shadow_path: str = "logs/shadow.jsonl"
+    shadow_decisions_path: str = "logs/shadow_decisions.jsonl"
+    # Transcripts contain PII: off unless you have consent and a retention policy (PRD Q7).
+    save_transcripts: bool = False
+    transcripts_path: str = "logs/transcripts.jsonl"
     ack_enabled: bool = True
     speculative_jev: bool = False  # needs streaming partial transcripts (A-10)
     metrics_path: str = "logs/metrics.jsonl"
@@ -49,4 +56,6 @@ class Settings(BaseSettings):
                 f"jev_model={self.jev_model!r} is not allowed when app_env={self.app_env!r}; "
                 "pin an exact version such as jev-1.14.0 (A-11)"
             )
+        if self.shadow_mode and not self.baseline_mode:
+            raise ValueError("shadow_mode runs beside a live baseline call; set baseline_mode too")
         return self
