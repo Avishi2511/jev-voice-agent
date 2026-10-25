@@ -1,9 +1,11 @@
 """Core domain models shared by script engine, Jev layer and controller."""
 
 from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, Field
 
+JsonDict = dict[str, Any]
 ESCAPE_OPTIONS: frozenset[str] = frozenset({"none", "unclear", "not_stated"})
 
 
@@ -53,6 +55,7 @@ class JevQuestion(BaseModel):
     type: QuestionType
     instruction: str
     options: list[str] = Field(default_factory=list)
+    descriptions: dict[str, str] = Field(default_factory=dict)
 
 
 class JevAnswer(BaseModel):

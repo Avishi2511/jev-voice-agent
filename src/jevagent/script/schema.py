@@ -44,3 +44,11 @@ class Script(BaseModel):
             if s.id == step_id:
                 return s
         raise KeyError(step_id)
+
+    def clip_text(self, clip_id: str) -> str | None:
+        for step in self.steps:
+            for group in (step.clips.ask, step.clips.re_ask, step.clips.confirm):
+                for clip in group:
+                    if clip.id == clip_id:
+                        return clip.text
+        return None
