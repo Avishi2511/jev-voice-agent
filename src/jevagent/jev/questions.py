@@ -38,9 +38,26 @@ def _later_unfilled(script: Script, state: CallState, current: Step) -> list[Ste
 
 
 def build_questions(
-    script: Script, state: CallState, shuffle_seed: int | None = None
+    script: Script,
+    state: CallState,
+    shuffle_seed: int | None = None,
+    instructions: dict[str, str] | None = None,
 ) -> list[JevQuestion]:
-    """All questions for one turn, to be sent in a single request."""
+    """All questions for one turn, to be sent in a single request.
+
+    `instructions` overrides question wording by key (a question-set version, E-5).
+    """
+    qs = _standard_questions(script, state, shuffle_seed)
+    if not instructions:
+        return qs
+    return [
+        q.model_copy(update={"instruction": instructions.get(q.key, q.instruction)}) for q in qs
+    ]
+
+
+def _standard_questions(
+    script: Script, state: CallState, shuffle_seed: int | None
+) -> list[JevQuestion]:
     rng = random.Random(shuffle_seed) if shuffle_seed is not None else None
     step = script.step(state.step)
     spec = step.questions["slot_value"]
