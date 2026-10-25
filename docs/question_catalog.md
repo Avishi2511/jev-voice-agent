@@ -33,3 +33,21 @@ and must be re-tuned when the pinned Jev model changes.
 Dates (numeric, "15th March", "March 15", "pandrah tareekh"), amounts (digits, `k`, lakh/hazaar, Hindi number words),
 phones (10-digit Indian mobiles, spoken digit words). Hindi number words cover 0-31, round tens, and sau/hazaar/lakh;
 other compound numbers (e.g. 47) are not parsed yet.
+
+## Catalog status (emi_reminder, pinned model `jev-1.14.0`)
+
+| Question | Definition | Threshold | Wording version | Last eval |
+| --- | --- | --- | --- | --- |
+| `answered_step` | Latest utterance directly answers the question in `last_clip` (`docs/labelling_guide.md`). | 0.70 (script default) | built-in | not evaluated |
+| `slot_value:<step>` | The option the caller stated; escape when none applies. | 0.70 | script YAML | not evaluated |
+| `answers_other_step` | A later step the caller also answered, else `none` (early fill). | 0.70 | built-in | not evaluated |
+| `corrects_stored` | Contradicts a stored value (confirming or repeating is `no`). | 0.70 | built-in | not evaluated |
+| `turn_type` | on_script / question / objection / complaint / wants_human / wrong_person / unclear. Fires handoff at confidence 0.50 (`OFF_SCRIPT_THRESHOLD`, early-handoff bias). | 0.50 | built-in | not evaluated |
+
+**No labelled data exists yet**, so every threshold above is the unvalidated default and no question has an evaluation
+score. Fill the "Last eval" column from `logs/eval_validation.md` after `python -m jevagent.eval.cli`; store tuned thresholds
+with `eval.versions.save_thresholds` (keyed by Jev model version) and keep wording versions in `questions/<script>/`.
+
+## Post-call judge (not on the call path)
+`handoff_timing` (choice: too_early / right_time / too_late / not_needed / unclear) and `caller_repeated` (noul), asked over
+the whole transcript by `eval.judge.judge_call`. These may use cross-turn context because they run after the call.
