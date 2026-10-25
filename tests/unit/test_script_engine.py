@@ -257,18 +257,14 @@ def test_unknown_on_filled_rejected(tmp_path: Path) -> None:
 
 
 def test_last_step_with_slot_rejected(tmp_path: Path) -> None:
-    text = (
-        "name: x
+    text = """
+name: x
 thresholds: {default: 0.7}
 steps:
-"
-        "  - id: a
+  - id: a
     slot: s
-"
-        "    clips: {ask: [{id: a1, text: hi}], re_ask: [{id: a2, text: hi}]}
-"
-        "    questions: {slot_value: {type: choice, instruction: q, options: [unclear]}}
-"
-    )
+    clips: {ask: [{id: a1, text: hi}], re_ask: [{id: a2, text: hi}]}
+    questions: {slot_value: {type: choice, instruction: q, options: [unclear]}}
+"""
     with pytest.raises(ScriptError, match="terminal"):
         load_script(_write(tmp_path, text))

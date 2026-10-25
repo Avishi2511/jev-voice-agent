@@ -29,9 +29,6 @@ def validate_script(script: Script) -> None:
     if "default" not in script.thresholds:
         raise ScriptError("script.thresholds must define 'default'")
 
-    if script.steps[-1].slot is not None:
-        raise ScriptError("the last step must be a terminal step without a slot")
-
     ids = [s.id for s in script.steps]
     if len(set(ids)) != len(ids):
         raise ScriptError(f"duplicate step ids: {ids}")
@@ -64,3 +61,6 @@ def validate_script(script: Script) -> None:
     ]
     if len(set(clip_ids)) != len(clip_ids):
         raise ScriptError("clip ids must be unique across the script")
+
+    if script.steps[-1].slot is not None:
+        raise ScriptError("the last step must be a terminal step without a slot")
